@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="w-14 h-14 rounded-2xl bg-[#F4EDE3] flex items-center justify-center mx-auto mb-4">
       <i data-lucide="book-open" class="w-7 h-7 text-[#4C5135]"></i>
     </div>
-    <h1 class="text-2xl font-bold text-[#F4EDE3]">MY LAB AFRICA</h1>
+    <h1 class="text-2xl font-bold text-[#F4EDE3]">EMMRIZTECH</h1>
     <p class="text-[#F4EDE3] text-sm mt-1">Accounting & Finance Management</p>
   </div>
 
