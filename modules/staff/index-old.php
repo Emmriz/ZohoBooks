@@ -11,7 +11,7 @@ $db            = getDB();
 $currentModule = 'staff';
 $pageTitle     = 'Staff / HR';
 
-// Auto-expire leaves
+// Auto-expire leaves: restore to active if leave end date has passed
 try {
     $db->query("
         UPDATE staff s
@@ -23,47 +23,14 @@ try {
     ");
 } catch (Exception $e) {}
 
-// ── ACTIVATE LEAVE (from card action) ────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'activate_leave') {
-    $staffId     = (int)post('staff_id');
-    $leaveStart  = post('leave_start');
-    $leaveEnd    = post('leave_end');
-    $leaveReason = post('leave_reason');
-
-    if ($staffId && $leaveStart && $leaveEnd) {
-        // Cancel any existing active leave
-        $db->prepare("UPDATE staff_leaves SET status='cancelled' WHERE staff_id=? AND status='active'")
-           ->execute([$staffId]);
-        // Insert new leave
-        $db->prepare("INSERT INTO staff_leaves (staff_id, leave_start, leave_end, leave_reason, status, created_by) VALUES (?,?,?,?,'active',?)")
-           ->execute([$staffId, $leaveStart, $leaveEnd, $leaveReason, $_SESSION['user_id']]);
-        // Set staff status to on_leave
-        $db->prepare("UPDATE staff SET status='on_leave' WHERE id=?")->execute([$staffId]);
-        $_SESSION['flash_success'] = 'Leave activated successfully.';
-    } else {
-        $_SESSION['flash_error'] = 'Please fill in both leave start and end dates.';
-    }
-    header('Location: ' . APP_URL . '/modules/staff/index.php?tab=staff&status=on_leave'); exit;
-}
-
-// ── REVOKE LEAVE ─────────────────────────────────────────────
-if (get('action') === 'revoke_leave' && get('id')) {
-    $staffId = (int)get('id');
-    $db->prepare("UPDATE staff_leaves SET status='cancelled' WHERE staff_id=? AND status='active'")
-       ->execute([$staffId]);
-    $db->prepare("UPDATE staff SET status='active' WHERE id=?")->execute([$staffId]);
-    $_SESSION['flash_success'] = 'Leave revoked. Staff is now active.';
-    header('Location: ' . APP_URL . '/modules/staff/index.php?tab=staff'); exit;
-}
-
-// ── DELETE STAFF ──────────────────────────────────────────────
+// DELETE STAFF
 if (get('action') === 'delete_staff' && get('id')) {
     $db->prepare("UPDATE staff SET status='terminated' WHERE id=?")->execute([(int)get('id')]);
     $_SESSION['flash_success'] = 'Staff record terminated.';
     header('Location: ' . APP_URL . '/modules/staff/index.php'); exit;
 }
 
-// ── DELETE DEPARTMENT ─────────────────────────────────────────
+// DELETE DEPARTMENT
 if (get('action') === 'delete_dept' && get('id')) {
     $deptId = (int)get('id');
     $used   = $db->prepare("SELECT COUNT(*) FROM staff WHERE department_id=? AND status != 'terminated'");
@@ -77,7 +44,7 @@ if (get('action') === 'delete_dept' && get('id')) {
     header('Location: ' . APP_URL . '/modules/staff/index.php?tab=departments'); exit;
 }
 
-// ── SAVE DEPARTMENT ───────────────────────────────────────────
+// SAVE DEPARTMENT
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'department') {
     $editDeptId  = (int)post('edit_dept_id');
     $name        = trim(post('dept_name'));
@@ -99,12 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'department') {
     header('Location: ' . APP_URL . '/modules/staff/index.php?tab=departments'); exit;
 }
 
-// ── SAVE STAFF ────────────────────────────────────────────────
+// SAVE STAFF
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'staff') {
-    $editId      = (int)post('edit_id');
-    $newStatus   = post('status', 'active');
-    $leaveStart  = post('leave_start');
-    $leaveEnd    = post('leave_end');
+    $editId     = (int)post('edit_id');
+    $newStatus  = post('status', 'active');
+    $leaveStart = post('leave_start');
+    $leaveEnd   = post('leave_end');
     $leaveReason = post('leave_reason');
 
     $data = [
@@ -157,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'staff') {
     header('Location: ' . APP_URL . '/modules/staff/index.php'); exit;
 }
 
-// ── FETCH DATA ────────────────────────────────────────────────
+// FETCH
 $tab          = get('tab', 'staff');
 $search       = get('search');
 $filterDept   = get('dept');
@@ -175,8 +142,7 @@ $whereSQL = implode(' AND ', $where);
 
 $cnt = $db->prepare("SELECT COUNT(*) FROM staff s WHERE $whereSQL");
 $cnt->execute($params);
-$pg = paginate((int)$cnt->fetchColumn(), $page);
-
+$pg   = paginate((int)$cnt->fetchColumn(), $page);
 $stmt = $db->prepare("
     SELECT s.*, d.name as dept_name,
            sl.leave_start, sl.leave_end, sl.leave_reason
@@ -197,7 +163,7 @@ $departments = $db->query("
     GROUP BY d.id ORDER BY d.name
 ")->fetchAll();
 
-$editStaff = null; $activeLeave = null;
+$editStaff   = null; $activeLeave = null;
 if (get('edit')) {
     $s = $db->prepare("SELECT * FROM staff WHERE id=?"); $s->execute([(int)get('edit')]); $editStaff = $s->fetch();
     if ($editStaff) {
@@ -210,19 +176,14 @@ if (get('edit_dept')) {
     $sd = $db->prepare("SELECT * FROM departments WHERE id=?"); $sd->execute([(int)get('edit_dept')]); $editDept = $sd->fetch();
 }
 
-$summary = $db->query("
-    SELECT COUNT(*) as total,
-           SUM(salary) as total_salary,
-           SUM(CASE WHEN status='active'   THEN 1 ELSE 0 END) as active,
-           SUM(CASE WHEN status='on_leave' THEN 1 ELSE 0 END) as on_leave
-    FROM staff
-")->fetch();
+$summary = $db->query("SELECT COUNT(*) as total, SUM(salary) as total_salary, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status='on_leave' THEN 1 ELSE 0 END) as on_leave FROM staff")->fetch();
 
 include __DIR__ . '/../../includes/header.php';
 ?>
 
 <!-- Page Header -->
 <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+  <!-- Left: Tabs -->
   <div class="flex gap-1 border-b border-gray-200 self-end">
     <a href="?tab=staff" class="px-5 py-2.5 text-sm font-medium border-b-2 transition-colors <?= $tab==='staff'?'border-brand text-brand':'border-transparent text-gray-500 hover:text-gray-700' ?>">
       <i data-lucide="users" class="w-4 h-4 inline mr-1"></i> Staff
@@ -232,6 +193,8 @@ include __DIR__ . '/../../includes/header.php';
       <span class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600"><?= count($departments) ?></span>
     </a>
   </div>
+
+  <!-- Right: Filters + Action Button (staff tab only) -->
   <div class="flex items-center gap-2 flex-wrap">
     <?php if ($tab === 'staff'): ?>
     <div class="relative">
@@ -240,13 +203,15 @@ include __DIR__ . '/../../includes/header.php';
              onchange="location='?tab=staff&search='+encodeURIComponent(this.value)+'&dept=<?= urlencode($filterDept) ?>&status=<?= urlencode($filterStatus) ?>'">
       <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5"></i>
     </div>
-    <select onchange="location='?tab=staff&dept='+this.value+'&search=<?= urlencode($search) ?>&status=<?= urlencode($filterStatus) ?>'" class="form-input py-2 text-sm w-40">
+    <select onchange="location='?tab=staff&dept='+this.value+'&search=<?= urlencode($search) ?>&status=<?= urlencode($filterStatus) ?>'"
+            class="form-input py-2 text-sm w-40">
       <option value="">All Departments</option>
       <?php foreach($departments as $d): ?>
       <option value="<?= $d['id'] ?>" <?= $filterDept==$d['id']?'selected':'' ?>><?= clean($d['name']) ?></option>
       <?php endforeach; ?>
     </select>
-    <select onchange="location='?tab=staff&status='+this.value+'&search=<?= urlencode($search) ?>&dept=<?= urlencode($filterDept) ?>'" class="form-input py-2 text-sm w-36">
+    <select onchange="location='?tab=staff&status='+this.value+'&search=<?= urlencode($search) ?>&dept=<?= urlencode($filterDept) ?>'"
+            class="form-input py-2 text-sm w-36">
       <?php foreach(['active'=>'Active','on_leave'=>'On Leave','inactive'=>'Inactive','terminated'=>'Terminated'] as $k=>$v): ?>
       <option value="<?= $k ?>" <?= $filterStatus===$k?'selected':'' ?>><?= $v ?></option>
       <?php endforeach; ?>
@@ -288,8 +253,7 @@ include __DIR__ . '/../../includes/header.php';
   <?php foreach($staffList as $staff): ?>
   <div class="card p-5">
     <div class="flex items-start gap-3 mb-3">
-      <div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-           style="background:var(--brand)">
+      <div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0" style="background:var(--brand)">
         <?= strtoupper(substr($staff['first_name'],0,1).substr($staff['last_name'],0,1)) ?>
       </div>
       <div class="flex-1 min-w-0">
@@ -299,98 +263,37 @@ include __DIR__ . '/../../includes/header.php';
       </div>
       <?= statusBadge($staff['status']) ?>
     </div>
-
     <div class="space-y-1.5 text-xs text-gray-500 mb-3">
-      <?php if($staff['dept_name']): ?>
-      <div class="flex items-center gap-2"><i data-lucide="building" class="w-3.5 h-3.5"></i><?= clean($staff['dept_name']) ?></div>
-      <?php endif; ?>
-      <?php if($staff['email']): ?>
-      <div class="flex items-center gap-2 truncate"><i data-lucide="mail" class="w-3.5 h-3.5 flex-shrink-0"></i><?= clean($staff['email']) ?></div>
-      <?php endif; ?>
-      <?php if($staff['phone']): ?>
-      <div class="flex items-center gap-2"><i data-lucide="phone" class="w-3.5 h-3.5"></i><?= clean($staff['phone']) ?></div>
-      <?php endif; ?>
-      <?php if($staff['hire_date']): ?>
-      <div class="flex items-center gap-2"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>Hired <?= formatDate($staff['hire_date']) ?></div>
-      <?php endif; ?>
-
-      <!-- Leave duration badge -->
+      <?php if($staff['dept_name']): ?><div class="flex items-center gap-2"><i data-lucide="building" class="w-3.5 h-3.5"></i><?= clean($staff['dept_name']) ?></div><?php endif; ?>
+      <?php if($staff['email']): ?><div class="flex items-center gap-2 truncate"><i data-lucide="mail" class="w-3.5 h-3.5 flex-shrink-0"></i><?= clean($staff['email']) ?></div><?php endif; ?>
+      <?php if($staff['phone']): ?><div class="flex items-center gap-2"><i data-lucide="phone" class="w-3.5 h-3.5"></i><?= clean($staff['phone']) ?></div><?php endif; ?>
+      <?php if($staff['hire_date']): ?><div class="flex items-center gap-2"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>Hired <?= formatDate($staff['hire_date']) ?></div><?php endif; ?>
       <?php if($staff['status']==='on_leave' && $staff['leave_start'] && $staff['leave_end']): ?>
       <div class="flex items-center gap-2 mt-1 bg-yellow-50 border border-yellow-200 rounded-lg px-2 py-1.5">
         <i data-lucide="calendar-off" class="w-3.5 h-3.5 text-yellow-600 flex-shrink-0"></i>
-        <span class="text-yellow-700 font-medium">
-          Leave: <?= formatDate($staff['leave_start']) ?> — <?= formatDate($staff['leave_end']) ?>
-        </span>
+        <span class="text-yellow-700 font-medium">Leave: <?= formatDate($staff['leave_start']) ?> — <?= formatDate($staff['leave_end']) ?></span>
       </div>
       <?php endif; ?>
     </div>
-
-    <!-- Card Footer: salary + action buttons -->
     <div class="flex items-center justify-between border-t pt-3">
-      <span class="text-xs font-semibold text-gray-800">
-        <?= formatCurrency($staff['salary']) ?><span class="text-gray-400 font-normal">/<?= $staff['salary_type'] ?></span>
-      </span>
-
-      <!-- Action buttons -->
-      <div class="flex items-center gap-1">
-
-        <!-- Edit -->
-        <a href="?edit=<?= $staff['id'] ?>&tab=staff"
-           class="p-1.5 rounded hover:bg-yellow-50 text-yellow-500" title="Edit Staff">
-          <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-        </a>
-
-        <?php if ($staff['status'] === 'on_leave'): ?>
-        <!-- Revoke Leave — only shown when staff is on leave -->
-        <button onclick="revokeLeave(<?= $staff['id'] ?>, '<?= clean($staff['first_name'].' '.$staff['last_name']) ?>')"
-                class="p-1.5 rounded hover:bg-green-50 text-green-600" title="Revoke Leave">
-          <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-        </button>
-        <?php else: ?>
-        <!-- Activate Leave — shown for active / inactive staff -->
-        <button onclick="openLeaveModal(<?= $staff['id'] ?>, '<?= clean($staff['first_name'].' '.$staff['last_name']) ?>')"
-                class="p-1.5 rounded hover:bg-yellow-50 text-yellow-600" title="Activate Leave">
-          <i data-lucide="calendar-off" class="w-3.5 h-3.5"></i>
-        </button>
-        <?php endif; ?>
-
-        <!-- Terminate -->
-        <button onclick="confirmDelete('?action=delete_staff&id=<?= $staff['id'] ?>','Terminate this staff member?')"
-                class="p-1.5 rounded hover:bg-red-50 text-red-400" title="Terminate">
-          <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
-        </button>
-
+      <span class="text-xs font-semibold text-gray-800"><?= formatCurrency($staff['salary']) ?><span class="text-gray-400 font-normal">/<?= $staff['salary_type'] ?></span></span>
+      <div class="flex gap-1">
+        <a href="?edit=<?= $staff['id'] ?>&tab=staff" class="p-1.5 rounded hover:bg-yellow-50 text-yellow-500" title="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></a>
+        <button onclick="confirmDelete('?action=delete_staff&id=<?= $staff['id'] ?>','Terminate this staff member?')" class="p-1.5 rounded hover:bg-red-50 text-red-400" title="Terminate"><i data-lucide="user-x" class="w-3.5 h-3.5"></i></button>
       </div>
     </div>
-
-    <!-- Tooltip labels under buttons (visible on hover via title attr above, but add text labels for clarity) -->
-    <?php if ($staff['status'] !== 'on_leave'): ?>
-    <div class="flex justify-end mt-1 gap-1 text-gray-300" style="font-size:0.6rem">
-      <span style="width:1.75rem;text-align:center">Edit</span>
-      <span style="width:1.75rem;text-align:center">Leave</span>
-      <span style="width:1.75rem;text-align:center">End</span>
-    </div>
-    <?php else: ?>
-    <div class="flex justify-end mt-1 gap-1 text-gray-300" style="font-size:0.6rem">
-      <span style="width:1.75rem;text-align:center">Edit</span>
-      <span style="width:1.75rem;text-align:center">Revoke</span>
-      <span style="width:1.75rem;text-align:center">End</span>
-    </div>
-    <?php endif; ?>
   </div>
   <?php endforeach; ?>
-
   <?php if(!$staffList): ?>
   <div class="col-span-3 card p-12 text-center text-gray-400">
     <i data-lucide="users" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
-    <p class="font-medium">No staff members found.</p>
-    <p class="text-sm mt-1">Click "Add Staff" to get started.</p>
+    <p class="font-medium">No staff members found.</p><p class="text-sm mt-1">Click "Add Staff" to get started.</p>
   </div>
   <?php endif; ?>
 </div>
 
 <?php else: ?>
-<!-- ── DEPARTMENTS TAB ────────────────────────────────────── -->
+<!-- DEPARTMENTS TAB -->
 <?php if(!$departments): ?>
 <div class="card p-12 text-center text-gray-400">
   <i data-lucide="building" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
@@ -417,9 +320,7 @@ include __DIR__ . '/../../includes/header.php';
         <td class="px-4 py-3 text-xs text-gray-400"><?= $i+1 ?></td>
         <td class="px-4 py-3">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-              <i data-lucide="building" class="w-4 h-4 text-indigo-500"></i>
-            </div>
+            <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="building" class="w-4 h-4 text-indigo-500"></i></div>
             <span class="text-sm font-semibold text-gray-800"><?= clean($dept['name']) ?></span>
           </div>
         </td>
@@ -434,7 +335,7 @@ include __DIR__ . '/../../includes/header.php';
           <div class="flex items-center justify-center gap-1">
             <a href="?tab=staff&dept=<?= $dept['id'] ?>" class="p-1.5 rounded hover:bg-blue-50 text-blue-500" title="View Staff"><i data-lucide="eye" class="w-3.5 h-3.5"></i></a>
             <a href="?tab=departments&edit_dept=<?= $dept['id'] ?>" class="p-1.5 rounded hover:bg-yellow-50 text-yellow-500" title="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></a>
-            <button onclick="confirmDelete('?action=delete_dept&id=<?= $dept['id'] ?>','Delete department? All staff must be reassigned first.')" class="p-1.5 rounded hover:bg-red-50 text-red-400" title="Delete"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            <button onclick="confirmDelete('?action=delete_dept&id=<?= $dept['id'] ?>','Delete this department? All staff must be reassigned first.')" class="p-1.5 rounded hover:bg-red-50 text-red-400" title="Delete"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
           </div>
         </td>
       </tr>
@@ -446,102 +347,8 @@ include __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 
-<!-- ══════════════════════════════════════════════════════════
-     ACTIVATE LEAVE MODAL
-════════════════════════════════════════════════════════════ -->
-<div id="leaveModal" class="modal-overlay hidden">
-<div class="modal-box max-w-md">
-  <div class="flex items-center justify-between px-6 py-4 border-b">
-    <div>
-      <h2 class="text-base font-semibold">Activate Leave</h2>
-      <p id="leaveStaffName" class="text-xs text-gray-400 mt-0.5"></p>
-    </div>
-    <button onclick="closeModal('leaveModal')" class="text-gray-400 hover:text-gray-600">
-      <i data-lucide="x" class="w-5 h-5"></i>
-    </button>
-  </div>
-  <form method="POST" class="p-6 space-y-4" onsubmit="return validateLeaveForm()">
-    <input type="hidden" name="form" value="activate_leave">
-    <input type="hidden" name="staff_id" id="leaveStaffId">
-
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="form-label">Leave Start Date *</label>
-        <input type="date" name="leave_start" id="modalLeaveStart" required class="form-input"
-               min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
-      </div>
-      <div>
-        <label class="form-label">Leave End Date *</label>
-        <input type="date" name="leave_end" id="modalLeaveEnd" required class="form-input"
-               min="<?= date('Y-m-d', strtotime('+1 day')) ?>">
-      </div>
-    </div>
-
-    <!-- Live duration display -->
-    <div id="modalLeaveDuration" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5 text-sm text-yellow-800 font-medium flex items-center gap-2">
-      <i data-lucide="clock" class="w-4 h-4 flex-shrink-0"></i>
-      <span id="modalDurationText"></span>
-    </div>
-
-    <div>
-      <label class="form-label">Reason / Notes</label>
-      <textarea name="leave_reason" rows="3" class="form-input"
-                placeholder="Annual leave, medical leave, maternity leave..."></textarea>
-    </div>
-
-    <div class="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700">
-      <i data-lucide="info" class="w-3.5 h-3.5 inline mr-1"></i>
-      Staff status will automatically return to <strong>Active</strong> when the leave end date is reached.
-    </div>
-
-    <div class="flex justify-end gap-3 pt-2">
-      <button type="button" onclick="closeModal('leaveModal')" class="btn-secondary">Cancel</button>
-      <button type="submit" class="btn-primary">
-        <i data-lucide="calendar-off" class="w-4 h-4"></i> Activate Leave
-      </button>
-    </div>
-  </form>
-</div>
-</div>
-
-
-<!-- ══════════════════════════════════════════════════════════
-     REVOKE LEAVE CONFIRM MODAL
-════════════════════════════════════════════════════════════ -->
-<div id="revokeModal" class="modal-overlay hidden">
-<div class="modal-box max-w-sm">
-  <div class="flex items-center justify-between px-6 py-4 border-b">
-    <h2 class="text-base font-semibold">Revoke Leave</h2>
-    <button onclick="closeModal('revokeModal')" class="text-gray-400 hover:text-gray-600">
-      <i data-lucide="x" class="w-5 h-5"></i>
-    </button>
-  </div>
-  <div class="p-6">
-    <div class="flex items-start gap-3 mb-5">
-      <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-        <i data-lucide="user-check" class="w-5 h-5 text-green-600"></i>
-      </div>
-      <div>
-        <p class="text-sm font-medium text-gray-800">Revoke leave for <span id="revokeStaffName" class="text-brand"></span>?</p>
-        <p class="text-xs text-gray-500 mt-1">This will immediately set the staff status back to <strong>Active</strong> and cancel the current leave record.</p>
-      </div>
-    </div>
-    <div class="flex justify-end gap-3">
-      <button onclick="closeModal('revokeModal')" class="btn-secondary">Cancel</button>
-      <a id="revokeConfirmLink" href="#" class="btn-primary" style="background:#16a34a">
-        <i data-lucide="user-check" class="w-4 h-4"></i> Yes, Revoke Leave
-      </a>
-    </div>
-  </div>
-</div>
-</div>
-
-
-<!-- ══════════════════════════════════════════════════════════
-     DEPARTMENT MODAL
-════════════════════════════════════════════════════════════ -->
-<div id="deptModal" class="modal-overlay <?= $editDept?'':'hidden' ?>">
-<div class="modal-box max-w-md">
+<!-- DEPARTMENT MODAL -->
+<div id="deptModal" class="modal-overlay <?= $editDept?'':'hidden' ?>"><div class="modal-box max-w-md">
   <div class="flex items-center justify-between px-6 py-4 border-b">
     <h2 class="text-base font-semibold"><?= $editDept?'Edit Department':'New Department' ?></h2>
     <button onclick="closeModal('deptModal')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -566,15 +373,11 @@ include __DIR__ . '/../../includes/header.php';
       <button type="submit" class="btn-primary"><i data-lucide="save" class="w-4 h-4"></i> <?= $editDept?'Update':'Create' ?> Department</button>
     </div>
   </form>
-</div>
-</div>
+</div></div>
 
 
-<!-- ══════════════════════════════════════════════════════════
-     STAFF MODAL (Add / Edit)
-════════════════════════════════════════════════════════════ -->
-<div id="staffModal" class="modal-overlay <?= $editStaff?'':'hidden' ?>">
-<div class="modal-box max-w-3xl">
+<!-- STAFF MODAL -->
+<div id="staffModal" class="modal-overlay <?= $editStaff?'':'hidden' ?>"><div class="modal-box max-w-3xl">
   <div class="flex items-center justify-between px-6 py-4 border-b">
     <h2 class="text-base font-semibold"><?= $editStaff?'Edit Staff Member':'Add Staff Member' ?></h2>
     <button onclick="closeModal('staffModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -586,8 +389,7 @@ include __DIR__ . '/../../includes/header.php';
     <!-- Tabs -->
     <div class="flex gap-1 mb-5 border-b border-gray-100">
       <?php foreach(['personal'=>'Personal','employment'=>'Employment','payroll'=>'Payroll','emergency'=>'Emergency'] as $t=>$tl): ?>
-      <button type="button" onclick="switchTab('<?= $t ?>')" id="tab_<?= $t ?>"
-              class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-brand transition-colors"><?= $tl ?></button>
+      <button type="button" onclick="switchTab('<?= $t ?>')" id="tab_<?= $t ?>" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-brand transition-colors"><?= $tl ?></button>
       <?php endforeach; ?>
     </div>
 
@@ -601,9 +403,9 @@ include __DIR__ . '/../../includes/header.php';
         <div><label class="form-label">Gender</label>
           <select name="gender" class="form-input">
             <option value="">Select...</option>
-            <option value="male"   <?= ($editStaff['gender']??'')==='male'  ?'selected':'' ?>>Male</option>
+            <option value="male" <?= ($editStaff['gender']??'')==='male'?'selected':'' ?>>Male</option>
             <option value="female" <?= ($editStaff['gender']??'')==='female'?'selected':'' ?>>Female</option>
-            <option value="other"  <?= ($editStaff['gender']??'')==='other' ?'selected':'' ?>>Other</option>
+            <option value="other" <?= ($editStaff['gender']??'')==='other'?'selected':'' ?>>Other</option>
           </select>
         </div>
         <div><label class="form-label">Date of Birth</label><input type="date" name="date_of_birth" class="form-input" value="<?= $editStaff['date_of_birth']??'' ?>"></div>
@@ -619,9 +421,7 @@ include __DIR__ . '/../../includes/header.php';
         <div><label class="form-label">Department</label>
           <select name="department_id" class="form-input">
             <option value="">None</option>
-            <?php foreach($departments as $d): ?>
-            <option value="<?= $d['id'] ?>" <?= ($editStaff['department_id']??0)==$d['id']?'selected':'' ?>><?= clean($d['name']) ?></option>
-            <?php endforeach; ?>
+            <?php foreach($departments as $d): ?><option value="<?= $d['id'] ?>" <?= ($editStaff['department_id']??0)==$d['id']?'selected':'' ?>><?= clean($d['name']) ?></option><?php endforeach; ?>
           </select>
         </div>
         <div><label class="form-label">Job Title</label><input type="text" name="job_title" class="form-input" value="<?= clean($editStaff['job_title']??'') ?>"></div>
@@ -632,7 +432,8 @@ include __DIR__ . '/../../includes/header.php';
             <?php endforeach; ?>
           </select>
         </div>
-        <div><label class="form-label">Status</label>
+        <div>
+          <label class="form-label">Status</label>
           <select name="status" id="staffStatus" class="form-input" onchange="handleStatusChange(this.value)">
             <?php foreach(['active'=>'Active','on_leave'=>'On Leave','inactive'=>'Inactive','terminated'=>'Terminated'] as $k=>$v): ?>
             <option value="<?= $k ?>" <?= ($editStaff['status']??'active')===$k?'selected':'' ?>><?= $v ?></option>
@@ -642,28 +443,30 @@ include __DIR__ . '/../../includes/header.php';
         <div><label class="form-label">Hire Date</label><input type="date" name="hire_date" class="form-input" value="<?= $editStaff['hire_date']??'' ?>"></div>
         <div></div>
 
-        <!-- Leave section inside staff modal -->
+        <!-- Leave Section — shown only when status = on_leave -->
         <div id="leaveSection" class="col-span-2 <?= ($editStaff['status']??'')==='on_leave'?'':'hidden' ?>">
           <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 space-y-3">
             <div class="flex items-center gap-2 text-yellow-700 text-sm font-semibold">
               <i data-lucide="calendar-off" class="w-4 h-4"></i> Leave Duration
-              <span class="text-xs font-normal text-yellow-600 ml-1">— Auto-returns to Active when leave ends</span>
+              <span class="text-xs font-normal text-yellow-600 ml-1">Staff auto-returns to Active when leave ends</span>
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="form-label text-yellow-800">Leave Start *</label>
+                <label class="form-label text-yellow-800">Leave Start Date *</label>
                 <input type="date" name="leave_start" id="leaveStart" class="form-input"
-                       value="<?= $activeLeave['leave_start']??date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>">
+                       value="<?= $activeLeave['leave_start']??date('Y-m-d') ?>"
+                       min="<?= date('Y-m-d') ?>">
               </div>
               <div>
-                <label class="form-label text-yellow-800">Leave End *</label>
+                <label class="form-label text-yellow-800">Leave End Date *</label>
                 <input type="date" name="leave_end" id="leaveEnd" class="form-input"
-                       value="<?= $activeLeave['leave_end']??'' ?>" min="<?= date('Y-m-d',strtotime('+1 day')) ?>">
+                       value="<?= $activeLeave['leave_end']??'' ?>"
+                       min="<?= date('Y-m-d',strtotime('+1 day')) ?>">
               </div>
             </div>
             <div>
-              <label class="form-label text-yellow-800">Reason</label>
-              <textarea name="leave_reason" rows="2" class="form-input" placeholder="Annual, medical, maternity..."><?= clean($activeLeave['leave_reason']??'') ?></textarea>
+              <label class="form-label text-yellow-800">Reason / Notes</label>
+              <textarea name="leave_reason" rows="2" class="form-input" placeholder="Annual leave, medical, maternity..."><?= clean($activeLeave['leave_reason']??'') ?></textarea>
             </div>
             <div id="leaveDuration" class="text-xs text-yellow-700 font-medium"></div>
           </div>
@@ -702,25 +505,21 @@ include __DIR__ . '/../../includes/header.php';
       <button type="submit" class="btn-primary"><i data-lucide="save" class="w-4 h-4"></i> Save Staff</button>
     </div>
   </form>
-</div>
-</div>
+</div></div>
 
 
 <script>
-// ── Tab switching ─────────────────────────────────────────────
+// Tab switching
 function switchTab(tab) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('border-brand','text-brand');
-    b.classList.add('border-transparent','text-gray-500');
-  });
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('border-brand','text-brand'); b.classList.add('border-transparent','text-gray-500'); });
   document.getElementById('pane_' + tab).classList.remove('hidden');
   document.getElementById('tab_' + tab).classList.add('border-brand','text-brand');
   document.getElementById('tab_' + tab).classList.remove('border-transparent','text-gray-500');
 }
 switchTab('personal');
 
-// ── Status change inside staff edit modal ─────────────────────
+// Leave calendar
 function handleStatusChange(val) {
   const section = document.getElementById('leaveSection');
   const startEl = document.getElementById('leaveStart');
@@ -737,17 +536,23 @@ function handleStatusChange(val) {
     endEl.required   = false;
   }
 }
+
 function updateLeaveDuration() {
   const start = document.getElementById('leaveStart').value;
   const end   = document.getElementById('leaveEnd').value;
   const div   = document.getElementById('leaveDuration');
   if (start && end) {
     const diff = Math.round((new Date(end) - new Date(start)) / 86400000);
-    div.textContent = diff > 0 ? '📅 Duration: ' + diff + ' day' + (diff!==1?'s':'') : '⚠️ End date must be after start.';
-  } else { div.textContent = ''; }
+    if (diff > 0)      div.textContent = '📅 Duration: ' + diff + ' day' + (diff !== 1 ? 's' : '');
+    else if (diff === 0) div.textContent = '📅 Duration: 1 day';
+    else               div.textContent = '⚠️ End date must be after start date.';
+  } else {
+    div.textContent = '';
+  }
 }
-document.getElementById('leaveStart').addEventListener('change', function() {
-  const next = new Date(this.value); next.setDate(next.getDate()+1);
+
+document.getElementById('leaveStart').addEventListener('change', function () {
+  const next = new Date(this.value); next.setDate(next.getDate() + 1);
   document.getElementById('leaveEnd').min = next.toISOString().split('T')[0];
   updateLeaveDuration();
 });
@@ -758,60 +563,6 @@ window.addEventListener('load', () => { handleStatusChange('on_leave'); updateLe
 <?php endif; ?>
 <?php if($editStaff): ?>window.addEventListener('load', () => openModal('staffModal'));<?php endif; ?>
 <?php if($editDept):  ?>window.addEventListener('load', () => openModal('deptModal'));<?php endif; ?>
-
-// ── Activate Leave modal (from card button) ───────────────────
-function openLeaveModal(staffId, staffName) {
-  document.getElementById('leaveStaffId').value  = staffId;
-  document.getElementById('leaveStaffName').textContent = staffName;
-  // Reset fields
-  document.getElementById('modalLeaveStart').value = '<?= date('Y-m-d') ?>';
-  document.getElementById('modalLeaveEnd').value   = '';
-  document.getElementById('modalLeaveDuration').classList.add('hidden');
-  openModal('leaveModal');
-}
-
-function validateLeaveForm() {
-  const start = document.getElementById('modalLeaveStart').value;
-  const end   = document.getElementById('modalLeaveEnd').value;
-  if (!start || !end) { alert('Please select both start and end dates.'); return false; }
-  if (new Date(end) <= new Date(start)) { alert('End date must be after start date.'); return false; }
-  return true;
-}
-
-// Live duration inside leave modal
-document.getElementById('modalLeaveStart').addEventListener('change', updateModalDuration);
-document.getElementById('modalLeaveEnd').addEventListener('change', updateModalDuration);
-
-function updateModalDuration() {
-  const start = document.getElementById('modalLeaveStart').value;
-  const end   = document.getElementById('modalLeaveEnd').value;
-  const box   = document.getElementById('modalLeaveDuration');
-  const txt   = document.getElementById('modalDurationText');
-  if (start && end) {
-    const diff = Math.round((new Date(end) - new Date(start)) / 86400000);
-    if (diff > 0) {
-      txt.textContent = 'Duration: ' + diff + ' day' + (diff!==1?'s':'');
-      box.classList.remove('hidden');
-    } else {
-      txt.textContent = '⚠️ End date must be after start date.';
-      box.classList.remove('hidden');
-    }
-  } else {
-    box.classList.add('hidden');
-  }
-  // Also update end date min
-  if (start) {
-    const next = new Date(start); next.setDate(next.getDate()+1);
-    document.getElementById('modalLeaveEnd').min = next.toISOString().split('T')[0];
-  }
-}
-
-// ── Revoke Leave confirmation modal ──────────────────────────
-function revokeLeave(staffId, staffName) {
-  document.getElementById('revokeStaffName').textContent = staffName;
-  document.getElementById('revokeConfirmLink').href = '?action=revoke_leave&id=' + staffId;
-  openModal('revokeModal');
-}
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
