@@ -115,6 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'staff') {
     $leaveStart  = post('leave_start');
     $leaveEnd    = post('leave_end');
     $leaveReason = post('leave_reason');
+    $removePhoto = post('remove_photo') === '1';
+
+    $existingPhoto = null;
+    if ($editId) {
+        $ep = $db->prepare("SELECT photo FROM staff WHERE id=?");
+        $ep->execute([$editId]);
+        $existingPhoto = $ep->fetchColumn();
+    }
 
     $data = [
         'department_id'           => (int)post('department_id') ?: null,
@@ -141,6 +149,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'staff') {
         'notes'                   => post('notes'),
         'created_by'              => $_SESSION['user_id'],
     ];
+
+    // Photo upload — validate, store, and clean up the old file when replaced/removed
+    if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+        $file    = $_FILES['photo'];
+        $allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+        if (!in_array($file['type'], $allowed)) {
+            $_SESSION['flash_error'] = 'Invalid photo type. Use JPG, PNG, or WebP.';
+        } elseif ($file['size'] > 2 * 1024 * 1024) {
+            $_SESSION['flash_error'] = 'Photo too large. Max 2MB.';
+        } else {
+            $photoDir = __DIR__ . '/../../uploads/staff/';
+            if (!is_dir($photoDir)) mkdir($photoDir, 0755, true);
+            $ext      = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $filename = 'staff_' . time() . '_' . uniqid() . '.' . $ext;
+            if (move_uploaded_file($file['tmp_name'], $photoDir . $filename)) {
+                if ($existingPhoto && file_exists(__DIR__ . '/../../' . $existingPhoto)) @unlink(__DIR__ . '/../../' . $existingPhoto);
+                $data['photo'] = 'uploads/staff/' . $filename;
+            } else {
+                $_SESSION['flash_error'] = 'Failed to save photo. Check folder permissions on uploads/staff/';
+            }
+        }
+    } elseif ($removePhoto && $existingPhoto) {
+        if (file_exists(__DIR__ . '/../../' . $existingPhoto)) @unlink(__DIR__ . '/../../' . $existingPhoto);
+        $data['photo'] = null;
+    }
 
     if ($editId) {
         $set = implode(', ', array_map(fn($k) => "$k=?", array_keys($data)));
@@ -298,13 +331,21 @@ include __DIR__ . '/../../includes/header.php';
 <?php if ($tab === 'staff'): ?>
 <!-- Staff Cards -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  <?php foreach($staffList as $staff): ?>
+  <?php foreach($staffList as $staff):
+    $cardPhotoFull = !empty($staff['photo']) ? __DIR__ . '/../../' . $staff['photo'] : '';
+    $cardHasPhoto  = $cardPhotoFull && file_exists($cardPhotoFull);
+  ?>
   <div class="card p-5">
     <div class="flex items-start gap-3 mb-3">
+      <?php if ($cardHasPhoto): ?>
+      <img src="<?= APP_URL ?>/<?= clean($staff['photo']) ?>?v=<?= filemtime($cardPhotoFull) ?>" alt=""
+           class="w-12 h-12 rounded-full object-cover flex-shrink-0">
+      <?php else: ?>
       <div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
            style="background:var(--brand)">
         <?= strtoupper(substr($staff['first_name'],0,1).substr($staff['last_name'],0,1)) ?>
       </div>
+      <?php endif; ?>
       <div class="flex-1 min-w-0">
         <h3 class="font-semibold text-gray-800 truncate"><?= clean($staff['first_name'].' '.$staff['last_name']) ?></h3>
         <p class="text-xs text-gray-500 truncate"><?= clean($staff['job_title']??'') ?></p>
@@ -482,7 +523,10 @@ include __DIR__ . '/../../includes/header.php';
   <!-- Header -->
   <div class="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100" style="background:var(--brand-light)">
     <div class="flex items-center gap-4 min-w-0">
-      <div id="vsAvatar" class="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0" style="background:var(--brand)"></div>
+      <div class="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-xl flex-shrink-0" style="background:var(--brand)">
+        <img id="vsAvatarImg" src="" alt="" class="w-full h-full object-cover hidden">
+        <span id="vsAvatarInitials"></span>
+      </div>
       <div class="min-w-0">
         <h2 id="vsName" class="text-lg font-semibold text-gray-800 truncate"></h2>
         <p id="vsTitle" class="text-sm text-gray-500 truncate"></p>
@@ -722,9 +766,40 @@ include __DIR__ . '/../../includes/header.php';
     <h2 class="text-base font-semibold"><?= $editStaff?'Edit Staff Member':'Add Staff Member' ?></h2>
     <button onclick="closeModal('staffModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
-  <form method="POST" class="p-6">
+  <form method="POST" enctype="multipart/form-data" class="p-6">
     <input type="hidden" name="form" value="staff">
     <?php if($editStaff): ?><input type="hidden" name="edit_id" value="<?= $editStaff['id'] ?>"><?php endif; ?>
+
+    <?php
+      $staffPhotoFull = !empty($editStaff['photo']) ? __DIR__ . '/../../' . $editStaff['photo'] : '';
+      $hasStaffPhoto  = $staffPhotoFull && file_exists($staffPhotoFull);
+      $staffInitials  = strtoupper(substr($editStaff['first_name'] ?? '', 0, 1) . substr($editStaff['last_name'] ?? '', 0, 1)) ?: '?';
+    ?>
+    <!-- Profile Photo -->
+    <div class="flex items-center gap-4 mb-5 pb-5 border-b border-gray-100">
+      <div class="relative flex-shrink-0">
+        <div class="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-xl" style="background:var(--brand)">
+          <img id="photoPreviewImg" src="<?= $hasStaffPhoto ? APP_URL . '/' . clean($editStaff['photo']) . '?v=' . filemtime($staffPhotoFull) : '' ?>"
+               alt="" class="w-full h-full object-cover <?= $hasStaffPhoto ? '' : 'hidden' ?>">
+          <span id="photoPreviewInitials" class="<?= $hasStaffPhoto ? 'hidden' : '' ?>"><?= $staffInitials ?></span>
+        </div>
+        <button type="button" onclick="document.getElementById('photoInput').click()"
+                class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow hover:bg-gray-50" title="Change photo">
+          <i data-lucide="camera" class="w-3 h-3 text-gray-600"></i>
+        </button>
+        <input type="file" name="photo" id="photoInput" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="previewStaffPhoto(this)">
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-700">Profile Photo</p>
+        <p class="text-xs text-gray-400">JPG, PNG or WebP — max 2MB</p>
+        <?php if ($hasStaffPhoto): ?>
+        <label class="inline-flex items-center gap-1.5 text-xs text-red-500 mt-1.5 cursor-pointer">
+          <input type="checkbox" name="remove_photo" id="removePhotoCheck" value="1" class="w-3.5 h-3.5" onchange="handleRemovePhotoToggle(this)">
+          Remove current photo
+        </label>
+        <?php endif; ?>
+      </div>
+    </div>
 
     <!-- Tabs -->
     <div class="flex gap-1 mb-5 border-b border-gray-100">
@@ -850,6 +925,28 @@ include __DIR__ . '/../../includes/header.php';
 
 
 <script>
+// ── Profile photo picker (staff add/edit modal) ────────────────
+function previewStaffPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('photoPreviewImg').src = e.target.result;
+    document.getElementById('photoPreviewImg').classList.remove('hidden');
+    document.getElementById('photoPreviewInitials').classList.add('hidden');
+    const removeCheck = document.getElementById('removePhotoCheck');
+    if (removeCheck) removeCheck.checked = false;
+  };
+  reader.readAsDataURL(file);
+}
+function handleRemovePhotoToggle(checkbox) {
+  if (checkbox.checked) {
+    document.getElementById('photoInput').value = '';
+    document.getElementById('photoPreviewImg').classList.add('hidden');
+    document.getElementById('photoPreviewInitials').classList.remove('hidden');
+  }
+}
+
 // ── Tab switching ─────────────────────────────────────────────
 function switchTab(tab) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
@@ -989,7 +1086,17 @@ function viewStaff(id) {
   const s = staffData.find(x => String(x.id) === String(id));
   if (!s) return;
 
-  document.getElementById('vsAvatar').textContent = (s.first_name?.[0] || '') + (s.last_name?.[0] || '');
+  const vsAvatarImg = document.getElementById('vsAvatarImg');
+  const vsAvatarInitials = document.getElementById('vsAvatarInitials');
+  if (s.photo) {
+    vsAvatarImg.src = '<?= APP_URL ?>/' + s.photo + '?v=' + Date.now();
+    vsAvatarImg.classList.remove('hidden');
+    vsAvatarInitials.classList.add('hidden');
+  } else {
+    vsAvatarImg.classList.add('hidden');
+    vsAvatarInitials.classList.remove('hidden');
+    vsAvatarInitials.textContent = (s.first_name?.[0] || '') + (s.last_name?.[0] || '');
+  }
   document.getElementById('vsName').textContent    = s.first_name + ' ' + s.last_name;
   document.getElementById('vsTitle').textContent   = s.job_title || 'No job title set';
   document.getElementById('vsEmpId').textContent   = s.employee_id || '';

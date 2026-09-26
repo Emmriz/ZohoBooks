@@ -314,6 +314,7 @@ CREATE TABLE staff (
   user_id INT,
   employee_id VARCHAR(50) UNIQUE,
   department_id INT,
+  photo VARCHAR(255),
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
   email VARCHAR(150) UNIQUE,
