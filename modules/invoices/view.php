@@ -29,9 +29,18 @@ include __DIR__ . '/../../includes/header.php';
 <div class="max-w-4xl mx-auto">
   <div class="card p-8 print:shadow-none">
     <!-- Invoice Header -->
+    <?php
+      $invLogoFull = $logoPath ? __DIR__ . '/../../' . $logoPath : '';
+      $invHasLogo  = $logoPath && file_exists($invLogoFull);
+    ?>
     <div class="flex justify-between mb-8">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800"><?= APP_NAME ?></h1>
+        <?php if ($invHasLogo): ?>
+        <img src="<?= APP_URL ?>/<?= clean($logoPath) ?>?v=<?= filemtime($invLogoFull) ?>" alt="<?= clean($appName) ?>"
+             class="h-24 w-auto max-w-[280px] object-contain">
+        <?php else: ?>
+        <h1 class="text-2xl font-bold text-gray-800"><?= clean($appName) ?></h1>
+        <?php endif; ?>
         <p class="text-gray-500 text-sm mt-1">Tax Invoice</p>
       </div>
       <div class="text-right">
