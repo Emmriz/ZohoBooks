@@ -334,6 +334,12 @@ include __DIR__ . '/../../includes/header.php';
       <!-- Action buttons -->
       <div class="flex items-center gap-1">
 
+        <!-- View -->
+        <button onclick="viewStaff(<?= $staff['id'] ?>)"
+                class="p-1.5 rounded hover:bg-blue-50 text-blue-500" title="View Details">
+          <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+        </button>
+
         <!-- Edit -->
         <a href="?edit=<?= $staff['id'] ?>&tab=staff"
            class="p-1.5 rounded hover:bg-yellow-50 text-yellow-500" title="Edit Staff">
@@ -366,12 +372,14 @@ include __DIR__ . '/../../includes/header.php';
     <!-- Tooltip labels under buttons (visible on hover via title attr above, but add text labels for clarity) -->
     <?php if ($staff['status'] !== 'on_leave'): ?>
     <div class="flex justify-end mt-1 gap-1 text-gray-300" style="font-size:0.6rem">
+      <span style="width:1.75rem;text-align:center">View</span>
       <span style="width:1.75rem;text-align:center">Edit</span>
       <span style="width:1.75rem;text-align:center">Leave</span>
       <span style="width:1.75rem;text-align:center">End</span>
     </div>
     <?php else: ?>
     <div class="flex justify-end mt-1 gap-1 text-gray-300" style="font-size:0.6rem">
+      <span style="width:1.75rem;text-align:center">View</span>
       <span style="width:1.75rem;text-align:center">Edit</span>
       <span style="width:1.75rem;text-align:center">Revoke</span>
       <span style="width:1.75rem;text-align:center">End</span>
@@ -444,6 +452,94 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 <?php endif; ?>
 <?php endif; ?>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     VIEW STAFF MODAL
+════════════════════════════════════════════════════════════ -->
+<div id="viewStaffModal" class="modal-overlay hidden">
+<div class="modal-box max-w-2xl">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100" style="background:var(--brand-light)">
+    <div class="flex items-center gap-4 min-w-0">
+      <div id="vsAvatar" class="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0" style="background:var(--brand)"></div>
+      <div class="min-w-0">
+        <h2 id="vsName" class="text-lg font-semibold text-gray-800 truncate"></h2>
+        <p id="vsTitle" class="text-sm text-gray-500 truncate"></p>
+        <p id="vsEmpId" class="text-xs font-medium mt-0.5" style="color:var(--brand)"></p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 flex-shrink-0">
+      <span id="vsStatus"></span>
+      <button onclick="closeModal('viewStaffModal')" class="text-gray-400 hover:text-gray-600">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+
+    <!-- Leave banner -->
+    <div id="vsLeaveBanner" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 flex items-center gap-2 text-sm text-yellow-800 font-medium">
+      <i data-lucide="calendar-off" class="w-4 h-4 flex-shrink-0"></i>
+      <span id="vsLeaveText"></span>
+    </div>
+
+    <!-- Personal Information -->
+    <div>
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Personal Information</h3>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div><p class="text-xs text-gray-400 mb-0.5">Email</p><p id="vsEmail" class="text-sm text-gray-800 font-medium break-all"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Phone</p><p id="vsPhone" class="text-sm text-gray-800 font-medium"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Gender</p><p id="vsGender" class="text-sm text-gray-800 font-medium capitalize"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Date of Birth</p><p id="vsDob" class="text-sm text-gray-800 font-medium"></p></div>
+        <div class="col-span-2"><p class="text-xs text-gray-400 mb-0.5">Address</p><p id="vsAddress" class="text-sm text-gray-800 font-medium"></p></div>
+      </div>
+    </div>
+
+    <!-- Employment -->
+    <div class="border-t border-gray-100 pt-5">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Employment</h3>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div><p class="text-xs text-gray-400 mb-0.5">Department</p><p id="vsDept" class="text-sm text-gray-800 font-medium"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Employment Type</p><p id="vsEmpType" class="text-sm text-gray-800 font-medium capitalize"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Hire Date</p><p id="vsHireDate" class="text-sm text-gray-800 font-medium"></p></div>
+      </div>
+    </div>
+
+    <!-- Payroll -->
+    <div class="border-t border-gray-100 pt-5">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Payroll</h3>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div><p class="text-xs text-gray-400 mb-0.5">Salary</p><p id="vsSalary" class="text-sm text-gray-800 font-medium"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Bank Name</p><p id="vsBank" class="text-sm text-gray-800 font-medium"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Account Number</p><p id="vsAccount" class="text-sm text-gray-800 font-medium"></p></div>
+      </div>
+    </div>
+
+    <!-- Emergency Contact -->
+    <div class="border-t border-gray-100 pt-5">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Emergency Contact</h3>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div><p class="text-xs text-gray-400 mb-0.5">Name</p><p id="vsEmergName" class="text-sm text-gray-800 font-medium"></p></div>
+        <div><p class="text-xs text-gray-400 mb-0.5">Phone</p><p id="vsEmergPhone" class="text-sm text-gray-800 font-medium"></p></div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div id="vsNotesWrap" class="border-t border-gray-100 pt-5 hidden">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Notes</h3>
+      <p id="vsNotes" class="text-sm text-gray-600 whitespace-pre-line"></p>
+    </div>
+  </div>
+
+  <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+    <button onclick="closeModal('viewStaffModal')" class="btn-secondary">Close</button>
+    <a id="vsEditBtn" href="#" class="btn-primary"><i data-lucide="pencil" class="w-4 h-4"></i> Edit Staff</a>
+  </div>
+</div>
+</div>
 
 
 <!-- ══════════════════════════════════════════════════════════
@@ -811,6 +907,84 @@ function revokeLeave(staffId, staffName) {
   document.getElementById('revokeStaffName').textContent = staffName;
   document.getElementById('revokeConfirmLink').href = '?action=revoke_leave&id=' + staffId;
   openModal('revokeModal');
+}
+
+// ── View Staff modal ──────────────────────────────────────────
+const staffData     = <?= json_encode($staffList, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const currencySymbol = '<?= addslashes(APP_CURRENCY_SYMBOL) ?>';
+
+function vsVal(v, fallback) {
+  fallback = fallback || '—';
+  return (v === null || v === undefined || v === '') ? fallback : v;
+}
+function vsDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  if (isNaN(dt)) return '—';
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return String(dt.getDate()).padStart(2,'0') + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+}
+function vsMoney(v) {
+  return currencySymbol + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function vsStatusBadge(status) {
+  const map = {
+    active: 'bg-green-100 text-green-700', inactive: 'bg-gray-100 text-gray-500',
+    terminated: 'bg-red-100 text-red-700', on_leave: 'bg-orange-100 text-orange-700'
+  };
+  const cls   = map[status] || 'bg-gray-100 text-gray-600';
+  const label = (status || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + cls + '">' + label + '</span>';
+}
+
+function viewStaff(id) {
+  const s = staffData.find(x => String(x.id) === String(id));
+  if (!s) return;
+
+  document.getElementById('vsAvatar').textContent = (s.first_name?.[0] || '') + (s.last_name?.[0] || '');
+  document.getElementById('vsName').textContent    = s.first_name + ' ' + s.last_name;
+  document.getElementById('vsTitle').textContent   = s.job_title || 'No job title set';
+  document.getElementById('vsEmpId').textContent   = s.employee_id || '';
+  document.getElementById('vsStatus').innerHTML    = vsStatusBadge(s.status);
+
+  document.getElementById('vsEmail').textContent  = vsVal(s.email);
+  document.getElementById('vsPhone').textContent  = vsVal(s.phone);
+  document.getElementById('vsGender').textContent = vsVal(s.gender);
+  document.getElementById('vsDob').textContent    = vsDate(s.date_of_birth);
+  document.getElementById('vsAddress').textContent = [s.address, s.city, s.state, s.country].filter(Boolean).join(', ') || '—';
+
+  document.getElementById('vsDept').textContent     = vsVal(s.dept_name);
+  document.getElementById('vsEmpType').textContent  = vsVal((s.employment_type || '').replace(/_/g, ' '));
+  document.getElementById('vsHireDate').textContent = vsDate(s.hire_date);
+
+  document.getElementById('vsSalary').textContent  = vsMoney(s.salary) + ' / ' + (s.salary_type || 'monthly');
+  document.getElementById('vsBank').textContent    = vsVal(s.bank_name);
+  document.getElementById('vsAccount').textContent = vsVal(s.account_number);
+
+  document.getElementById('vsEmergName').textContent  = vsVal(s.emergency_contact_name);
+  document.getElementById('vsEmergPhone').textContent = vsVal(s.emergency_contact_phone);
+
+  const notesWrap = document.getElementById('vsNotesWrap');
+  if (s.notes) {
+    notesWrap.classList.remove('hidden');
+    document.getElementById('vsNotes').textContent = s.notes;
+  } else {
+    notesWrap.classList.add('hidden');
+  }
+
+  const leaveBanner = document.getElementById('vsLeaveBanner');
+  if (s.status === 'on_leave' && s.leave_start && s.leave_end) {
+    leaveBanner.classList.remove('hidden');
+    document.getElementById('vsLeaveText').textContent =
+      'On leave: ' + vsDate(s.leave_start) + ' — ' + vsDate(s.leave_end) + (s.leave_reason ? ' (' + s.leave_reason + ')' : '');
+  } else {
+    leaveBanner.classList.add('hidden');
+  }
+
+  document.getElementById('vsEditBtn').href = '?edit=' + s.id + '&tab=staff';
+
+  openModal('viewStaffModal');
+  lucide.createIcons();
 }
 </script>
 

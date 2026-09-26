@@ -343,6 +343,26 @@ CREATE TABLE staff (
   FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+CREATE TABLE app_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  setting_key VARCHAR(100) NOT NULL UNIQUE,
+  setting_value TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE staff_leaves (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  staff_id INT NOT NULL,
+  leave_start DATE NOT NULL,
+  leave_end DATE NOT NULL,
+  leave_reason TEXT,
+  status ENUM('active','cancelled','expired') DEFAULT 'active',
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (staff_id) REFERENCES staff(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
 -- ─── AUDIT LOG ──────────────────────────────────────────────
 CREATE TABLE audit_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
