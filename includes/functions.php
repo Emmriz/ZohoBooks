@@ -3,6 +3,7 @@
 //  ZOHOBOOKS - Core Functions v2
 // ============================================================
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/mailer.php';
 session_start();
 
 // ─── Auth ────────────────────────────────────────────────────
@@ -112,6 +113,30 @@ function paginate(int $total, int $page, int $pp = 20): array {
     $page       = max(1, min($page, $totalPages));
     return ['total'=>$total,'page'=>$page,'totalPages'=>$totalPages,'perPage'=>$pp,'offset'=>($page-1)*$pp];
 }
+// ─── Staff Leave Actions (with email notifications) ────────────
+function activateStaffLeave(int $staffId, string $start, string $end, string $reason, int $createdBy): void {
+    $db = getDB();
+    $db->prepare("UPDATE staff_leaves SET status='cancelled' WHERE staff_id=? AND status='active'")->execute([$staffId]);
+    $db->prepare("INSERT INTO staff_leaves (staff_id, leave_start, leave_end, leave_reason, status, created_by) VALUES (?,?,?,?,'active',?)")
+       ->execute([$staffId, $start, $end, $reason, $createdBy]);
+    $db->prepare("UPDATE staff SET status='on_leave' WHERE id=?")->execute([$staffId]);
+
+    $stmt = $db->prepare("SELECT * FROM staff WHERE id=?"); $stmt->execute([$staffId]); $staff = $stmt->fetch();
+    if ($staff) notifyLeaveActivated($staff, $start, $end, $reason, $_SESSION['user'] ?? null);
+}
+
+function revokeStaffLeave(int $staffId): void {
+    $db = getDB();
+    $leaveStmt = $db->prepare("SELECT * FROM staff_leaves WHERE staff_id=? AND status='active' ORDER BY id DESC LIMIT 1");
+    $leaveStmt->execute([$staffId]); $leave = $leaveStmt->fetch();
+
+    $db->prepare("UPDATE staff_leaves SET status='cancelled' WHERE staff_id=? AND status='active'")->execute([$staffId]);
+    $db->prepare("UPDATE staff SET status='active' WHERE id=?")->execute([$staffId]);
+
+    $stmt = $db->prepare("SELECT * FROM staff WHERE id=?"); $stmt->execute([$staffId]); $staff = $stmt->fetch();
+    if ($staff && $leave) notifyLeaveRevoked($staff, $leave['leave_start'], $leave['leave_end'], $_SESSION['user'] ?? null);
+}
+
 function statusBadge(string $status): string {
     $map = [
         'draft'=>'bg-gray-100 text-gray-600','sent'=>'bg-blue-100 text-blue-700',
