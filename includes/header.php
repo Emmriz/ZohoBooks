@@ -15,6 +15,7 @@ $navItems = [
     'expenses'   => ['icon' => 'receipt',     'label' => 'Expenses & Bills', 'url' => 'expenses',  'perm' => 'expenses'],
     'contacts'   => ['icon' => 'users',       'label' => 'Contacts',         'url' => 'contacts',  'perm' => 'contacts'],
     'inventory'  => ['icon' => 'package',     'label' => 'Inventory',        'url' => 'inventory', 'perm' => 'inventory'],
+    'marketing'  => ['icon' => 'megaphone',   'label' => 'Marketing',        'url' => 'marketing', 'perm' => 'marketing'],
     'accounts'   => ['icon' => 'landmark',    'label' => 'Chart of Accounts','url' => 'accounts',  'perm' => 'accounts'],
     'bank'       => ['icon' => 'building-2',  'label' => 'Banking',          'url' => 'bank',      'perm' => 'bank'],
     'reports'    => ['icon' => 'bar-chart-2', 'label' => 'Reports',          'url' => 'reports',   'perm' => 'reports'],

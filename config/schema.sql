@@ -364,6 +364,72 @@ CREATE TABLE staff_leaves (
   FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- ─── MARKETING ──────────────────────────────────────────────
+CREATE TABLE campaigns (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  channel ENUM('social_media','email','sms','radio','print','influencer','referral','other') DEFAULT 'social_media',
+  budget DECIMAL(15,2) DEFAULT 0.00,
+  start_date DATE,
+  end_date DATE,
+  status ENUM('planned','active','completed','cancelled') DEFAULT 'planned',
+  description TEXT,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE leads (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  email VARCHAR(150),
+  phone VARCHAR(30),
+  source ENUM('walk_in','referral','social_media','website','ad','cold_call','other') DEFAULT 'other',
+  status ENUM('new','contacted','qualified','converted','lost') DEFAULT 'new',
+  campaign_id INT,
+  notes TEXT,
+  converted_contact_id INT,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+  FOREIGN KEY (converted_contact_id) REFERENCES contacts(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE promo_codes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(50) NOT NULL UNIQUE,
+  campaign_id INT,
+  item_id INT,
+  discount_type ENUM('percentage','fixed') DEFAULT 'percentage',
+  discount_value DECIMAL(10,2) DEFAULT 0.00,
+  max_uses INT,
+  used_count INT DEFAULT 0,
+  start_date DATE,
+  end_date DATE,
+  status ENUM('active','inactive') DEFAULT 'active',
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+  FOREIGN KEY (item_id) REFERENCES items(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE content_calendar (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  channel ENUM('social_media','email','sms','print','other') DEFAULT 'social_media',
+  scheduled_date DATE NOT NULL,
+  status ENUM('planned','posted','cancelled') DEFAULT 'planned',
+  campaign_id INT,
+  notes TEXT,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
 -- ─── AUDIT LOG ──────────────────────────────────────────────
 CREATE TABLE audit_log (
   id INT AUTO_INCREMENT PRIMARY KEY,

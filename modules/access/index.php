@@ -108,7 +108,7 @@ if (get('edit')) { $s=$db->prepare("SELECT * FROM users WHERE id=?"); $s->execut
 $editRole = null;
 if (get('edit_role')) { $sr=$db->prepare("SELECT * FROM roles WHERE id=?"); $sr->execute([(int)get('edit_role')]); $editRole=$sr->fetch(); }
 
-$allModules = ['dashboard','invoices','expenses','contacts','inventory','accounts','bank','reports','staff'];
+$allModules = ['dashboard','invoices','expenses','contacts','inventory','marketing','accounts','bank','reports','staff'];
 
 include __DIR__ . '/../../includes/header.php';
 ?>

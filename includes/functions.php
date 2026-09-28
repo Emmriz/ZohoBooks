@@ -147,6 +147,10 @@ function statusBadge(string $status): string {
         'approved'=>'bg-green-100 text-green-700','suspended'=>'bg-red-100 text-red-700',
         'published'=>'bg-blue-100 text-blue-700','terminated'=>'bg-red-100 text-red-700',
         'on_leave'=>'bg-orange-100 text-orange-700',
+        'new'=>'bg-blue-100 text-blue-700','contacted'=>'bg-yellow-100 text-yellow-700',
+        'qualified'=>'bg-purple-100 text-purple-700','converted'=>'bg-green-100 text-green-700',
+        'lost'=>'bg-red-100 text-red-700','planned'=>'bg-gray-100 text-gray-600',
+        'completed'=>'bg-green-100 text-green-700','posted'=>'bg-green-100 text-green-700',
     ];
     $cls = $map[$status] ?? 'bg-gray-100 text-gray-600';
     return "<span class=\"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium $cls\">"
