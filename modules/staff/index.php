@@ -1013,8 +1013,8 @@ function openLeaveModal(staffId, staffName) {
 function validateLeaveForm() {
   const start = document.getElementById('modalLeaveStart').value;
   const end   = document.getElementById('modalLeaveEnd').value;
-  if (!start || !end) { alert('Please select both start and end dates.'); return false; }
-  if (new Date(end) <= new Date(start)) { alert('End date must be after start date.'); return false; }
+  if (!start || !end) { customAlert('Please select both start and end dates.'); return false; }
+  if (new Date(end) <= new Date(start)) { customAlert('End date must be after start date.'); return false; }
   return true;
 }
 

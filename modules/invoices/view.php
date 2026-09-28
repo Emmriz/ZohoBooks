@@ -41,7 +41,7 @@ include __DIR__ . '/../../includes/header.php';
         <?php else: ?>
         <h1 class="text-2xl font-bold text-gray-800"><?= clean($appName) ?></h1>
         <?php endif; ?>
-        <p class="text-gray-500 text-sm mt-1">Tax Invoice</p>
+        <p class="text-gray-500 text-sm mt-1">CUSTOMER INVOICE</p>
       </div>
       <div class="text-right">
         <h2 class="text-xl font-bold text-blue-600"><?= clean($invoice['invoice_number']) ?></h2>

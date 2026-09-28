@@ -50,7 +50,7 @@ include __DIR__ . '/../../includes/header.php';
           <?php else: ?><div class="text-center text-gray-300"><i data-lucide="image-off" class="w-8 h-8 mx-auto mb-1"></i><p class="text-xs">No logo</p></div><?php endif; ?>
         </div>
         <?php if($currentLogo&&file_exists($logoFullPath)): ?>
-        <a href="?action=remove_logo" onclick="return confirm('Remove logo?')" class="mt-2 flex items-center justify-center gap-1 text-xs text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Remove</a>
+        <button type="button" onclick="confirmDelete('?action=remove_logo','Remove logo?')" class="mt-2 flex items-center justify-center gap-1 text-xs text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Remove</button>
         <?php endif; ?>
       </div>
       <div class="flex-1">

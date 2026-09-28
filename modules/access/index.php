@@ -48,22 +48,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'user') {
     header('Location: ' . APP_URL . '/modules/access/index.php'); exit;
 }
 
-// Update Role Permissions
+// Delete Role
+if (get('action') === 'delete_role' && get('id')) {
+    $roleId = (int)get('id');
+    $inUse  = $db->prepare("SELECT COUNT(*) FROM users WHERE role_id=?");
+    $inUse->execute([$roleId]);
+    if ($inUse->fetchColumn() > 0) {
+        $_SESSION['flash_error'] = 'Cannot delete — this role is still assigned to one or more users. Reassign them first.';
+    } else {
+        $db->prepare("DELETE FROM roles WHERE id=?")->execute([$roleId]);
+        $_SESSION['flash_success'] = 'Role deleted.';
+    }
+    header('Location: ' . APP_URL . '/modules/access/index.php?tab=roles'); exit;
+}
+
+// Create/Update Role (name, description & permissions)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'role') {
-    $roleId = (int)post('role_id');
-    $modules = post('modules',[]);
-    if (!is_array($modules)) $modules=[];
-    $perm = in_array('all',$modules) ? ['all'=>true] : array_fill_keys($modules,true);
-    $db->prepare("UPDATE roles SET permissions=? WHERE id=?")->execute([json_encode($perm), $roleId]);
-    $_SESSION['flash_success'] = 'Role permissions updated.';
+    $editRoleId  = (int)post('edit_id');
+    $name        = trim(post('name'));
+    $description = trim(post('description'));
+    $modules     = post('modules', []);
+    if (!is_array($modules)) $modules = [];
+    $perm = in_array('all', $modules) ? ['all' => true] : array_fill_keys($modules, true);
+
+    if ($name === '') {
+        $_SESSION['flash_error'] = 'Role name is required.';
+        header('Location: ' . APP_URL . '/modules/access/index.php?tab=roles'); exit;
+    }
+
+    try {
+        if ($editRoleId) {
+            $db->prepare("UPDATE roles SET name=?, description=?, permissions=? WHERE id=?")
+               ->execute([$name, $description, json_encode($perm), $editRoleId]);
+            $_SESSION['flash_success'] = 'Role updated.';
+        } else {
+            $db->prepare("INSERT INTO roles (name, description, permissions) VALUES (?,?,?)")
+               ->execute([$name, $description, json_encode($perm)]);
+            $_SESSION['flash_success'] = 'Role created.';
+        }
+    } catch (PDOException $e) {
+        $_SESSION['flash_error'] = (str_contains($e->getMessage(), 'Duplicate'))
+            ? 'A role with that name already exists.'
+            : 'Could not save role.';
+    }
     header('Location: ' . APP_URL . '/modules/access/index.php?tab=roles'); exit;
 }
 
 $tab = get('tab','users');
 $users = $db->query("SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id=r.id ORDER BY u.created_at DESC")->fetchAll();
-$roles = $db->query("SELECT * FROM roles ORDER BY id")->fetchAll();
+$roles = $db->query("
+    SELECT r.*, COUNT(u.id) as user_count
+    FROM roles r
+    LEFT JOIN users u ON u.role_id = r.id
+    GROUP BY r.id
+    ORDER BY r.id
+")->fetchAll();
 $editUser = null;
 if (get('edit')) { $s=$db->prepare("SELECT * FROM users WHERE id=?"); $s->execute([(int)get('edit')]); $editUser=$s->fetch(); }
+$editRole = null;
+if (get('edit_role')) { $sr=$db->prepare("SELECT * FROM roles WHERE id=?"); $sr->execute([(int)get('edit_role')]); $editRole=$sr->fetch(); }
 
 $allModules = ['dashboard','invoices','expenses','contacts','inventory','accounts','bank','reports','staff'];
 
@@ -134,37 +177,56 @@ include __DIR__ . '/../../includes/header.php';
 
 <?php elseif ($tab === 'roles'): ?>
 <!-- Roles Tab -->
-<div class="grid grid-cols-1 gap-4">
-  <?php foreach ($roles as $role):
-    $rolePerm = is_string($role['permissions']) ? json_decode($role['permissions'],true) : [];
-    $rolePerm = $rolePerm ?: [];
-  ?>
-  <div class="card p-5">
-    <form method="POST">
-      <input type="hidden" name="form" value="role">
-      <input type="hidden" name="role_id" value="<?= $role['id'] ?>">
-      <div class="flex items-start justify-between mb-4">
-        <div>
-          <h3 class="font-semibold text-gray-800 capitalize"><?= clean($role['name']) ?></h3>
-          <p class="text-xs text-gray-400"><?= clean($role['description']) ?></p>
-        </div>
-        <button type="submit" class="btn-primary text-xs"><i data-lucide="save" class="w-3.5 h-3.5"></i> Save</button>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <label class="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" name="modules[]" value="all" class="rounded" <?= !empty($rolePerm['all'])?'checked':'' ?> onchange="toggleAll(this)">
-          <span class="font-medium text-purple-700">All Access</span>
-        </label>
-        <?php foreach ($allModules as $mod): ?>
-        <label class="flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 module-check">
-          <input type="checkbox" name="modules[]" value="<?=$mod?>" class="rounded" <?= (!empty($rolePerm['all'])||!empty($rolePerm[$mod]))?'checked':'' ?>>
-          <?= ucwords(str_replace('_',' ',$mod)) ?>
-        </label>
-        <?php endforeach; ?>
-      </div>
-    </form>
-  </div>
-  <?php endforeach; ?>
+<div class="flex justify-end mb-4">
+  <button onclick="openModal('roleModal')" class="btn-primary"><i data-lucide="shield-plus" class="w-4 h-4"></i> Add Role</button>
+</div>
+
+<div class="card overflow-hidden">
+  <table class="w-full">
+    <thead class="bg-gray-50 border-b border-gray-100">
+      <tr class="text-xs text-gray-500 font-medium">
+        <th class="px-4 py-3 text-left">Role</th>
+        <th class="px-4 py-3 text-left">Description</th>
+        <th class="px-4 py-3 text-left">Permissions</th>
+        <th class="px-4 py-3 text-center">Users</th>
+        <th class="px-4 py-3 text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      <?php foreach ($roles as $role):
+        $rolePerm = is_string($role['permissions']) ? json_decode($role['permissions'],true) : [];
+        $rolePerm = $rolePerm ?: [];
+      ?>
+      <tr class="table-row">
+        <td class="px-4 py-3"><span class="text-sm font-semibold text-gray-800 capitalize"><?= clean($role['name']) ?></span></td>
+        <td class="px-4 py-3 text-xs text-gray-500"><?= clean($role['description'] ?? '—') ?></td>
+        <td class="px-4 py-3">
+          <div class="flex flex-wrap gap-1">
+            <?php if (!empty($rolePerm['all'])): ?>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">All Access</span>
+            <?php else: ?>
+              <?php foreach (array_keys($rolePerm) as $mod): ?>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"><?= ucwords(str_replace('_',' ',$mod)) ?></span>
+              <?php endforeach; ?>
+              <?php if (!$rolePerm): ?><span class="text-xs text-gray-300">No access</span><?php endif; ?>
+            <?php endif; ?>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-center text-xs text-gray-500"><?= $role['user_count'] ?></td>
+        <td class="px-4 py-3 text-center">
+          <div class="flex items-center justify-center gap-1">
+            <a href="?tab=roles&edit_role=<?= $role['id'] ?>" class="p-1 rounded hover:bg-yellow-50 text-yellow-500" title="Edit Role"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></a>
+            <?php if ($role['user_count'] == 0): ?>
+            <button onclick="confirmDelete('?action=delete_role&id=<?= $role['id'] ?>','Delete the &quot;<?= clean($role['name']) ?>&quot; role? This cannot be undone.')" class="p-1 rounded hover:bg-red-50 text-red-400" title="Delete Role"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            <?php else: ?>
+            <span class="p-1 text-gray-200 cursor-not-allowed" title="Cannot delete — role is assigned to <?= $role['user_count'] ?> user(s)"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></span>
+            <?php endif; ?>
+          </div>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
 </div>
 
 <?php elseif ($tab === 'audit'): ?>
@@ -237,10 +299,47 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 </div>
 
+<!-- Role Modal -->
+<?php $editRolePerm = $editRole ? (is_string($editRole['permissions']) ? json_decode($editRole['permissions'],true) : $editRole['permissions']) : []; $editRolePerm = $editRolePerm ?: []; ?>
+<div id="roleModal" class="modal-overlay <?= $editRole?'':'hidden' ?>">
+<div class="modal-box max-w-lg">
+  <div class="flex items-center justify-between px-6 py-4 border-b">
+    <h2 class="text-base font-semibold"><?= $editRole?'Edit Role':'Add Role' ?></h2>
+    <button onclick="closeModal('roleModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+  </div>
+  <form method="POST" class="p-6">
+    <input type="hidden" name="form" value="role">
+    <?php if ($editRole): ?><input type="hidden" name="edit_id" value="<?= $editRole['id'] ?>"><?php endif; ?>
+    <div class="grid grid-cols-1 gap-4 mb-5">
+      <div><label class="form-label">Role Name *</label><input type="text" name="name" required class="form-input" value="<?= clean($editRole['name']??'') ?>" placeholder="e.g. supervisor"></div>
+      <div><label class="form-label">Description</label><input type="text" name="description" class="form-input" value="<?= clean($editRole['description']??'') ?>" placeholder="Brief description of this role"></div>
+    </div>
+    <label class="form-label mb-2 block">Permissions</label>
+    <div class="flex flex-wrap gap-2">
+      <label class="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" name="modules[]" value="all" class="rounded" <?= !empty($editRolePerm['all'])?'checked':'' ?> onchange="toggleAll(this)">
+        <span class="font-medium text-purple-700">All Access</span>
+      </label>
+      <?php foreach ($allModules as $mod): ?>
+      <label class="flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 module-check">
+        <input type="checkbox" name="modules[]" value="<?=$mod?>" class="rounded" <?= (!empty($editRolePerm['all'])||!empty($editRolePerm[$mod]))?'checked':'' ?>>
+        <?= ucwords(str_replace('_',' ',$mod)) ?>
+      </label>
+      <?php endforeach; ?>
+    </div>
+    <div class="flex justify-end gap-3 mt-5 pt-4 border-t">
+      <button type="button" onclick="closeModal('roleModal')" class="btn-secondary">Cancel</button>
+      <button type="submit" class="btn-primary"><i data-lucide="save" class="w-4 h-4"></i> Save Role</button>
+    </div>
+  </form>
+</div>
+</div>
+
 <script>
 function toggleAll(cb) {
   document.querySelectorAll('.module-check input').forEach(i => i.checked = cb.checked);
 }
 <?php if ($editUser): ?>window.addEventListener('load',()=>openModal('userModal'));<?php endif; ?>
+<?php if ($editRole): ?>window.addEventListener('load',()=>openModal('roleModal'));<?php endif; ?>
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
