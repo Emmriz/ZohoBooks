@@ -10,11 +10,28 @@ $db = getDB();
 $currentModule = 'access';
 $pageTitle = 'Access Control';
 
-// Delete user
+// Suspend user
 if (get('action') === 'delete_user' && get('id')) {
     $uid = (int)get('id');
     if ($uid === (int)$_SESSION['user_id']) { $_SESSION['flash_error']='Cannot delete yourself.'; }
     else { $db->prepare("UPDATE users SET status='suspended' WHERE id=?")->execute([$uid]); $_SESSION['flash_success']='User suspended.'; }
+    header('Location: ' . APP_URL . '/modules/access/index.php'); exit;
+}
+
+// Permanently delete user (never the system admin account, never yourself)
+if (get('action') === 'delete_user_permanent' && get('id')) {
+    $uid = (int)get('id');
+    $target = $db->prepare("SELECT email FROM users WHERE id=?"); $target->execute([$uid]); $target = $target->fetch();
+    if (!$target) {
+        $_SESSION['flash_error'] = 'User not found.';
+    } elseif ($target['email'] === 'admin@zohobooks.local') {
+        $_SESSION['flash_error'] = 'The System Admin account cannot be deleted.';
+    } elseif ($uid === (int)$_SESSION['user_id']) {
+        $_SESSION['flash_error'] = 'You cannot delete your own account.';
+    } else {
+        $db->prepare("DELETE FROM users WHERE id=?")->execute([$uid]);
+        $_SESSION['flash_success'] = 'User deleted permanently.';
+    }
     header('Location: ' . APP_URL . '/modules/access/index.php'); exit;
 }
 
@@ -108,7 +125,8 @@ if (get('edit')) { $s=$db->prepare("SELECT * FROM users WHERE id=?"); $s->execut
 $editRole = null;
 if (get('edit_role')) { $sr=$db->prepare("SELECT * FROM roles WHERE id=?"); $sr->execute([(int)get('edit_role')]); $editRole=$sr->fetch(); }
 
-$allModules = ['dashboard','invoices','expenses','contacts','inventory','marketing','accounts','bank','reports','staff'];
+$allModules   = ['dashboard','invoices','expenses','contacts','inventory','marketing','accounts','bank','reports','staff'];
+$departments  = $db->query("SELECT id, name FROM departments ORDER BY name")->fetchAll();
 
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -163,9 +181,12 @@ include __DIR__ . '/../../includes/header.php';
         <td class="px-4 py-3 text-center"><?= statusBadge($u['status']) ?></td>
         <td class="px-4 py-3 text-center">
           <div class="flex items-center justify-center gap-1">
-            <a href="?edit=<?= $u['id'] ?>" class="p-1 rounded hover:bg-yellow-50 text-yellow-500"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></a>
+            <a href="?edit=<?= $u['id'] ?>" class="p-1 rounded hover:bg-yellow-50 text-yellow-500" title="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></a>
             <?php if ($u['id'] != $_SESSION['user_id']): ?>
-            <button onclick="confirmDelete('?action=delete_user&id=<?= $u['id'] ?>','Suspend this user?')" class="p-1 rounded hover:bg-red-50 text-red-400"><i data-lucide="user-x" class="w-3.5 h-3.5"></i></button>
+            <button onclick="confirmDelete('?action=delete_user&id=<?= $u['id'] ?>','Suspend this user?')" class="p-1 rounded hover:bg-orange-50 text-orange-400" title="Suspend"><i data-lucide="user-x" class="w-3.5 h-3.5"></i></button>
+            <?php endif; ?>
+            <?php if ($u['email'] !== 'admin@zohobooks.local' && $u['id'] != $_SESSION['user_id']): ?>
+            <button onclick="confirmDelete('?action=delete_user_permanent&id=<?= $u['id'] ?>','Permanently delete &quot;<?= clean($u['name']) ?>&quot;? This removes their login access completely and cannot be undone.')" class="p-1 rounded hover:bg-red-50 text-red-500" title="Delete Permanently"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
             <?php endif; ?>
           </div>
         </td>
@@ -271,7 +292,17 @@ include __DIR__ . '/../../includes/header.php';
       <div class="col-span-2"><label class="form-label">Full Name *</label><input type="text" name="name" required class="form-input" value="<?= clean($editUser['name']??'') ?>"></div>
       <div class="col-span-2"><label class="form-label">Email *</label><input type="email" name="email" required class="form-input" value="<?= clean($editUser['email']??'') ?>"></div>
       <div><label class="form-label">Phone</label><input type="text" name="phone" class="form-input" value="<?= clean($editUser['phone']??'') ?>"></div>
-      <div><label class="form-label">Department</label><input type="text" name="department" class="form-input" value="<?= clean($editUser['department']??'') ?>"></div>
+      <div><label class="form-label">Department</label>
+        <select name="department" class="form-input">
+          <option value="">None</option>
+          <?php foreach ($departments as $d): ?>
+          <option value="<?= clean($d['name']) ?>" <?= ($editUser['department']??'')===$d['name']?'selected':'' ?>><?= clean($d['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <?php if (!$departments): ?>
+        <p class="text-xs text-orange-500 mt-1">No departments yet — <a href="<?= APP_URL ?>/modules/staff/index.php?tab=departments" class="underline">create one</a> first.</p>
+        <?php endif; ?>
+      </div>
       <div><label class="form-label">Role *</label>
         <select name="role_id" required class="form-input">
           <?php foreach ($roles as $r): ?>
