@@ -9,15 +9,13 @@ $uploadDirUrl='uploads/logos/';
 if(!is_dir($uploadDir)) mkdir($uploadDir,0755,true);
 
 if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_FILES['logo'])){
-    $file=$_FILES['logo']; $allowed=['image/png','image/jpeg','image/jpg','image/svg+xml','image/gif','image/webp'];
-    if($file['error']!==UPLOAD_ERR_OK) $_SESSION['flash_error']='Upload failed. Please try again.';
-    elseif(!in_array($file['type'],$allowed)) $_SESSION['flash_error']='Invalid file type. Use PNG, JPG, SVG, or WebP.';
-    elseif($file['size']>2*1024*1024) $_SESSION['flash_error']='File too large. Max 2MB.';
+    $file=$_FILES['logo'];
+    $check = validateImageUpload($file);
+    if(!$check['ok']) $_SESSION['flash_error']=$check['error'];
     else{
         $old=getSetting('logo_path','');
         if($old&&file_exists(__DIR__.'/../../'.$old)) @unlink(__DIR__.'/../../'.$old);
-        $ext=strtolower(pathinfo($file['name'],PATHINFO_EXTENSION));
-        $filename='logo_'.time().'.'.$ext;
+        $filename='logo_'.time().'.'.$check['ext'];
         if(move_uploaded_file($file['tmp_name'],$uploadDir.$filename)){saveSetting('logo_path',$uploadDirUrl.$filename);$_SESSION['flash_success']='Logo uploaded successfully!';}
         else $_SESSION['flash_error']='Failed to save file. Check folder permissions on uploads/logos/';
     }
@@ -38,7 +36,7 @@ include __DIR__ . '/../../includes/header.php';
   <div class="card p-6">
     <div class="flex items-center gap-3 mb-5">
       <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:var(--brand-light)"><i data-lucide="image" class="w-5 h-5" style="color:var(--brand)"></i></div>
-      <div><h2 class="text-sm font-semibold text-gray-800">Company Logo</h2><p class="text-xs text-gray-400">Shown in the sidebar. PNG, JPG, SVG, or WebP — max 2MB.</p></div>
+      <div><h2 class="text-sm font-semibold text-gray-800">Company Logo</h2><p class="text-xs text-gray-400">Shown in the sidebar. PNG, JPG, GIF, or WebP — max 2MB.</p></div>
     </div>
     <div class="flex items-start gap-8">
       <div class="flex-shrink-0">
@@ -55,13 +53,14 @@ include __DIR__ . '/../../includes/header.php';
       </div>
       <div class="flex-1">
         <form method="POST" enctype="multipart/form-data" id="logoForm">
+          <?= csrfField() ?>
           <div id="dropZone" class="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center cursor-pointer hover:border-gray-400 transition-colors" onclick="document.getElementById('logoFile').click()" ondragover="event.preventDefault();this.classList.add('border-blue-400','bg-blue-50')" ondragleave="this.classList.remove('border-blue-400','bg-blue-50')" ondrop="handleDrop(event)">
             <i data-lucide="upload-cloud" class="w-10 h-10 mx-auto mb-3 text-gray-300"></i>
             <p class="text-sm font-medium text-gray-600">Drop your logo here</p>
             <p class="text-xs text-gray-400 mt-1">or click to browse</p>
-            <p class="text-xs text-gray-300 mt-2">PNG, JPG, SVG, WebP — max 2MB</p>
+            <p class="text-xs text-gray-300 mt-2">PNG, JPG, GIF, WebP — max 2MB</p>
           </div>
-          <input type="file" name="logo" id="logoFile" accept="image/*" class="hidden" onchange="previewLogo(this)">
+          <input type="file" name="logo" id="logoFile" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" onchange="previewLogo(this)">
           <div id="previewArea" class="hidden mt-4">
             <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
               <img id="previewImg" src="" alt="" class="w-12 h-12 object-contain rounded-lg border border-gray-200 bg-white">
@@ -78,6 +77,7 @@ include __DIR__ . '/../../includes/header.php';
   <!-- Theme -->
   <div class="card p-6">
     <form method="POST">
+      <?= csrfField() ?>
       <input type="hidden" name="form" value="theme">
       <div class="flex items-center gap-3 mb-5">
         <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:var(--brand-light)"><i data-lucide="palette" class="w-5 h-5" style="color:var(--brand)"></i></div>

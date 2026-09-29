@@ -897,6 +897,7 @@ $rDateTo   = get('date_to', date('Y-m-d'));
     <button onclick="closeModal('leadModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="lead">
     <?php if ($editLead): ?><input type="hidden" name="edit_id" value="<?= $editLead['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">
@@ -946,6 +947,7 @@ $rDateTo   = get('date_to', date('Y-m-d'));
     <button onclick="closeModal('emailBlastModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="email_blast">
     <div id="blastLeadIdsContainer"></div>
     <p class="text-xs text-gray-500 mb-4">Sending to <strong id="blastRecipientCount">0</strong> selected lead(s) with a valid email address.</p>
@@ -970,6 +972,7 @@ $rDateTo   = get('date_to', date('Y-m-d'));
     <button onclick="closeModal('campaignModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="campaign">
     <?php if ($editCampaign): ?><input type="hidden" name="edit_id" value="<?= $editCampaign['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">
@@ -1013,6 +1016,7 @@ $rDateTo   = get('date_to', date('Y-m-d'));
     <button onclick="closeModal('promoModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="promo">
     <?php if ($editPromo): ?><input type="hidden" name="edit_id" value="<?= $editPromo['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">
@@ -1069,6 +1073,7 @@ $rDateTo   = get('date_to', date('Y-m-d'));
     <button onclick="closeModal('contentModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="content">
     <?php if ($editContent): ?><input type="hidden" name="edit_id" value="<?= $editContent['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">

@@ -44,6 +44,25 @@
   // Init Lucide icons
   lucide.createIcons();
 
+  const __csrfToken = <?= json_encode(csrfToken()) ?>;
+
+  // Submits a GET-style "?action=x&id=y" URL as a real POST carrying the
+  // CSRF token, so every state-changing link (not just <form> submissions)
+  // is covered by the central CSRF check in requireLogin().
+  function postAction(url) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.style.display = 'none';
+    const csrf = document.createElement('input');
+    csrf.type  = 'hidden';
+    csrf.name  = 'csrf_token';
+    csrf.value = __csrfToken;
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+  }
+
   // Modal helpers
   function openModal(id) {
     document.getElementById(id).classList.remove('hidden');
@@ -63,12 +82,13 @@
     });
   }, 4000);
 
-  // Confirm delete helper — shows a branded dialog instead of the native confirm()
+  // Confirm delete helper — shows a branded dialog instead of the native confirm(),
+  // then submits the action as a CSRF-protected POST instead of a bare GET navigation.
   function confirmDelete(url, msg) {
     document.getElementById('confirmDialogMsg').textContent = msg || 'Are you sure you want to delete this record?';
     document.getElementById('confirmDialogConfirmBtn').onclick = function() {
       closeModal('confirmDialog');
-      window.location.href = url;
+      postAction(url);
     };
     openModal('confirmDialog');
   }

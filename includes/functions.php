@@ -4,7 +4,41 @@
 // ============================================================
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/mailer.php';
+
+// ─── Error visibility ───────────────────────────────────────────
+// Errors are always logged; only shown on-screen in development.
+error_reporting(E_ALL);
+ini_set('log_errors', '1');
+ini_set('display_errors', (defined('APP_ENV') && APP_ENV === 'development') ? '1' : '0');
+
+// ─── Session hardening ──────────────────────────────────────────
+// Must run before session_start().
+$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+ini_set('session.use_strict_mode', '1');
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+if ($isHttps) {
+    ini_set('session.cookie_secure', '1');
+}
 session_start();
+
+// ─── CSRF ────────────────────────────────────────────────────
+function csrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrfField(): string {
+    return '<input type="hidden" name="csrf_token" value="' . csrfToken() . '">';
+}
+
+function verifyCsrf(): bool {
+    $token = $_POST['csrf_token'] ?? '';
+    return $token !== '' && hash_equals($_SESSION['csrf_token'] ?? '', $token);
+}
 
 // ─── Auth ────────────────────────────────────────────────────
 function isLoggedIn(): bool {
@@ -16,6 +50,17 @@ function requireLogin(): void {
     if (!isLoggedIn()) { $_SESSION = []; session_destroy();
         header('Location: ' . APP_URL . '/login.php'); exit; }
     $_SESSION['last_activity'] = time();
+
+    // Every state-changing request in the app is a POST (including action
+    // links, which confirmDelete()/postAction() submit as POST specifically
+    // so this one check covers them) — verify the token before any handler runs.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verifyCsrf()) {
+        http_response_code(403);
+        $_SESSION['flash_error'] = 'Your session expired or the request could not be verified. Please try again.';
+        $back = $_SERVER['HTTP_REFERER'] ?? (APP_URL . '/modules/dashboard/index.php');
+        header('Location: ' . $back);
+        exit;
+    }
 }
 
 function currentUser(): array { return $_SESSION['user'] ?? []; }
@@ -28,16 +73,46 @@ function hasPermission(string $module): bool {
     return !empty($perms['all']) || !empty($perms[$module]);
 }
 
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MINUTES = 15;
+
 function login(string $email, string $password): array {
     $db   = getDB();
-    $stmt = $db->prepare("SELECT u.*, r.name as role_name, r.permissions
+    // is_locked / mins_left computed by MySQL itself (against its own NOW()) so this
+    // never depends on PHP's and MySQL's clocks/timezones agreeing.
+    $stmt = $db->prepare("SELECT u.*, r.name as role_name, r.permissions,
+                          (u.locked_until IS NOT NULL AND u.locked_until > NOW()) as is_locked,
+                          TIMESTAMPDIFF(SECOND, NOW(), u.locked_until) as lock_seconds_left
                           FROM users u JOIN roles r ON u.role_id=r.id
                           WHERE u.email=? AND u.status='active'");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
-    if (!$user || !password_verify($password, $user['password']))
+
+    // Account temporarily locked from repeated failed attempts
+    if ($user && $user['is_locked']) {
+        $minsLeft = max(1, (int)ceil($user['lock_seconds_left'] / 60));
+        return ['success' => false, 'message' => "Too many failed attempts. Try again in $minsLeft minute(s)."];
+    }
+
+    if (!$user || !password_verify($password, $user['password'])) {
+        if ($user) {
+            $attempts = (int)$user['failed_attempts'] + 1;
+            if ($attempts >= LOGIN_MAX_ATTEMPTS) {
+                $db->prepare("UPDATE users SET failed_attempts=?, locked_until=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?")
+                   ->execute([$attempts, LOGIN_LOCKOUT_MINUTES, $user['id']]);
+                auditLog('login_lockout', 'auth', $user['id']);
+            } else {
+                $db->prepare("UPDATE users SET failed_attempts=? WHERE id=?")->execute([$attempts, $user['id']]);
+            }
+        }
         return ['success' => false, 'message' => 'Invalid email or password'];
-    $db->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
+    }
+
+    $db->prepare("UPDATE users SET last_login=NOW(), failed_attempts=0, locked_until=NULL WHERE id=?")->execute([$user['id']]);
+
+    // Regenerate the session ID on privilege change to prevent session fixation
+    session_regenerate_id(true);
+
     $_SESSION['user_id']       = $user['id'];
     $_SESSION['user']          = $user;
     $_SESSION['last_activity'] = time();
@@ -59,6 +134,34 @@ function getSetting(string $key, string $default = ''): string {
         } catch (Exception $e) { $cache = []; }
     }
     return $cache[$key] ?? $default;
+}
+
+/**
+ * Validates an uploaded image by its actual content (not the client-supplied
+ * filename or Content-Type, both of which are trivially spoofable). Returns
+ * ['ok'=>true,'ext'=>'jpg'] or ['ok'=>false,'error'=>'...'].
+ */
+function validateImageUpload(array $file, int $maxBytes = 2 * 1024 * 1024): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return ['ok' => false, 'error' => 'Upload failed. Please try again.'];
+    }
+    if (($file['size'] ?? 0) > $maxBytes) {
+        return ['ok' => false, 'error' => 'File too large. Max ' . round($maxBytes / 1024 / 1024, 1) . 'MB.'];
+    }
+    $info = @getimagesize($file['tmp_name']);
+    if ($info === false) {
+        return ['ok' => false, 'error' => 'Invalid or corrupt image file.'];
+    }
+    $extByType = [
+        IMAGETYPE_JPEG => 'jpg',
+        IMAGETYPE_PNG  => 'png',
+        IMAGETYPE_GIF  => 'gif',
+        IMAGETYPE_WEBP => 'webp',
+    ];
+    if (!isset($extByType[$info[2]])) {
+        return ['ok' => false, 'error' => 'Unsupported image type. Use JPG, PNG, GIF, or WebP.'];
+    }
+    return ['ok' => true, 'ext' => $extByType[$info[2]]];
 }
 
 function saveSetting(string $key, string $value): void {

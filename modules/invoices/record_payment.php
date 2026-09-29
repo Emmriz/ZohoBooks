@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
+if (!hasPermission('invoices')) { $_SESSION['flash_error']='Access denied'; header('Location: '.APP_URL.'/modules/dashboard/index.php'); exit; }
 $db = getDB();
 $currentModule = 'invoices';
 $id = (int)get('id');
@@ -53,6 +54,7 @@ include __DIR__ . '/../../includes/header.php';
 
   <div class="card p-6">
     <form method="POST">
+      <?= csrfField() ?>
       <div class="space-y-4">
         <div>
           <label class="form-label">Payment Date *</label>

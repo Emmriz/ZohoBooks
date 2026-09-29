@@ -133,6 +133,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('journalModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <?php if ($editJournal): ?><input type="hidden" name="edit_id" value="<?= $editJournal['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-3 gap-4 mb-5">
       <div><label class="form-label">Date *</label><input type="date" name="entry_date" required class="form-input" value="<?= $editJournal['entry_date']??date('Y-m-d') ?>"></div>

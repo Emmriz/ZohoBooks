@@ -25,6 +25,8 @@ CREATE TABLE users (
   employee_id VARCHAR(50),
   avatar VARCHAR(255),
   status ENUM('active','inactive','suspended') DEFAULT 'active',
+  failed_attempts INT DEFAULT 0,
+  locked_until TIMESTAMP NULL DEFAULT NULL,
   last_login TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

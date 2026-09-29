@@ -1,0 +1,35 @@
+# ============================================================
+#  ZOHOBOOKS - Site-wide hardening
+# ============================================================
+
+# No directory listings if an index file is ever missing
+Options -Indexes
+
+# Never serve these file types directly, wherever they appear
+<FilesMatch "\.(sql|log|env|ini|bak|backup|swp|sh|md|gitignore)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Block access to version control / dependency metadata if present
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^\.git/ - [F,L]
+</IfModule>
+
+# Security headers (no-ops on hosts without mod_headers — the app doesn't depend on these)
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), camera=(), microphone=()"
+    Header unset X-Powered-By
+    Header always unset X-Powered-By
+</IfModule>
+
+ServerSignature Off

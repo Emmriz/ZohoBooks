@@ -1,2 +1,4 @@
 /vendor/
 config/mail.php
+config/database.php
+uploads/

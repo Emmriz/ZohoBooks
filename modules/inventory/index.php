@@ -381,6 +381,7 @@ include __DIR__ . '/../../includes/header.php';
     </button>
   </div>
   <form method="POST" class="p-6 space-y-4">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="category">
     <?php if ($editCat): ?><input type="hidden" name="edit_cat_id" value="<?= $editCat['id'] ?>"><?php endif; ?>
 
@@ -416,6 +417,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('itemModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="item">
     <?php if ($editItem): ?><input type="hidden" name="edit_id" value="<?= $editItem['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">
@@ -493,6 +495,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('adjModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6 space-y-4">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="adjustment">
     <input type="hidden" name="item_id" id="adjItemId">
     <div><label class="form-label">Adjustment Type</label>

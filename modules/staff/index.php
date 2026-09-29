@@ -150,19 +150,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'staff') {
         'created_by'              => $_SESSION['user_id'],
     ];
 
-    // Photo upload — validate, store, and clean up the old file when replaced/removed
-    if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-        $file    = $_FILES['photo'];
-        $allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-        if (!in_array($file['type'], $allowed)) {
-            $_SESSION['flash_error'] = 'Invalid photo type. Use JPG, PNG, or WebP.';
-        } elseif ($file['size'] > 2 * 1024 * 1024) {
-            $_SESSION['flash_error'] = 'Photo too large. Max 2MB.';
+    // Photo upload — validate by actual file content, store, and clean up the old file when replaced/removed
+    if (!empty($_FILES['photo']['name'])) {
+        $file  = $_FILES['photo'];
+        $check = validateImageUpload($file);
+        if (!$check['ok']) {
+            $_SESSION['flash_error'] = $check['error'];
         } else {
             $photoDir = __DIR__ . '/../../uploads/staff/';
             if (!is_dir($photoDir)) mkdir($photoDir, 0755, true);
-            $ext      = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            $filename = 'staff_' . time() . '_' . uniqid() . '.' . $ext;
+            $filename = 'staff_' . time() . '_' . uniqid() . '.' . $check['ext'];
             if (move_uploaded_file($file['tmp_name'], $photoDir . $filename)) {
                 if ($existingPhoto && file_exists(__DIR__ . '/../../' . $existingPhoto)) @unlink(__DIR__ . '/../../' . $existingPhoto);
                 $data['photo'] = 'uploads/staff/' . $filename;
@@ -648,6 +645,7 @@ include __DIR__ . '/../../includes/header.php';
     </button>
   </div>
   <form method="POST" class="p-6 space-y-4" onsubmit="return validateLeaveForm()">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="activate_leave">
     <input type="hidden" name="staff_id" id="leaveStaffId">
 
@@ -715,9 +713,9 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     <div class="flex justify-end gap-3">
       <button onclick="closeModal('revokeModal')" class="btn-secondary">Cancel</button>
-      <a id="revokeConfirmLink" href="#" class="btn-primary" style="background:#16a34a">
+      <button type="button" id="revokeConfirmLink" class="btn-primary" style="background:#16a34a">
         <i data-lucide="user-check" class="w-4 h-4"></i> Yes, Revoke Leave
-      </a>
+      </button>
     </div>
   </div>
 </div>
@@ -734,6 +732,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('deptModal')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6 space-y-4">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="department">
     <?php if($editDept): ?><input type="hidden" name="edit_dept_id" value="<?= $editDept['id'] ?>"><?php endif; ?>
     <div>
@@ -767,6 +766,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('staffModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" enctype="multipart/form-data" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="staff">
     <?php if($editStaff): ?><input type="hidden" name="edit_id" value="<?= $editStaff['id'] ?>"><?php endif; ?>
 
@@ -1049,7 +1049,7 @@ function updateModalDuration() {
 // ── Revoke Leave confirmation modal ──────────────────────────
 function revokeLeave(staffId, staffName) {
   document.getElementById('revokeStaffName').textContent = staffName;
-  document.getElementById('revokeConfirmLink').href = '?action=revoke_leave&id=' + staffId;
+  document.getElementById('revokeConfirmLink').onclick = function() { postAction('?action=revoke_leave&id=' + staffId); };
   openModal('revokeModal');
 }
 

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
 requireLogin();
+if (!hasPermission('invoices')) { $_SESSION['flash_error']='Access denied'; header('Location: '.APP_URL.'/modules/dashboard/index.php'); exit; }
 $db = getDB();
 $currentModule = 'invoices';
 $id = (int)get('id');

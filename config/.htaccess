@@ -1,0 +1,10 @@
+# Defense in depth: these files hold DB/SMTP credentials.
+# They only run correctly when include()'d by app code, never when
+# requested directly — deny direct web access outright.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

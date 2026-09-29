@@ -173,7 +173,7 @@ include __DIR__ . '/../../includes/header.php';
         </td>
         <td class="px-4 py-3 text-center">
           <?php if (!$txn['is_reconciled']): ?>
-          <a href="?action=reconcile&txn_id=<?= $txn['id'] ?>&bank_id=<?= $viewId ?>" class="text-xs text-blue-600 hover:underline">Reconcile</a>
+          <a href="#" onclick="event.preventDefault(); postAction('?action=reconcile&txn_id=<?= $txn['id'] ?>&bank_id=<?= $viewId ?>')" class="text-xs text-blue-600 hover:underline">Reconcile</a>
           <?php endif; ?>
         </td>
       </tr>
@@ -201,6 +201,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('txnModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6 space-y-4">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="transaction">
     <input type="hidden" name="bank_account_id" value="<?= $viewId ?>">
     <div class="grid grid-cols-2 gap-4">
@@ -232,6 +233,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('bankModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="bank_account">
     <?php if ($editBankAcc): ?><input type="hidden" name="edit_id" value="<?= $editBankAcc['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">

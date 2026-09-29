@@ -107,6 +107,7 @@ foreach ($grouped as $type => $accs):
     <button onclick="closeModal('accountModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6 space-y-4">
+    <?= csrfField() ?>
     <?php if ($editAccount): ?><input type="hidden" name="edit_id" value="<?= $editAccount['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">
       <div><label class="form-label">Account Code *</label><input type="text" name="account_code" required class="form-input" value="<?= clean($editAccount['account_code']??'') ?>" placeholder="1000"></div>

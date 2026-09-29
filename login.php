@@ -8,12 +8,16 @@ if (isLoggedIn()) {
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $result = login(post('email'), post('password'));
-    if ($result['success']) {
-        header('Location: ' . APP_URL . '/modules/dashboard/index.php');
-        exit;
+    if (!verifyCsrf()) {
+        $error = 'Your session expired. Please try again.';
+    } else {
+        $result = login(post('email'), post('password'));
+        if ($result['success']) {
+            header('Location: ' . APP_URL . '/modules/dashboard/index.php');
+            exit;
+        }
+        $error = $result['message'];
     }
-    $error = $result['message'];
 }
 ?>
 <!DOCTYPE html>
@@ -56,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="POST">
+      <?= csrfField() ?>
       <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
         <input type="email" name="email" required value="<?= clean(post('email')) ?>"

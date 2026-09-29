@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('form') === 'user') {
     if (!$editId || post('password')) {
         $pass = post('password');
         if (!$editId && !$pass) { $_SESSION['flash_error']='Password required for new user.'; header('Location: '.APP_URL.'/modules/access/index.php'); exit; }
+        if ($pass && strlen($pass) < 8) { $_SESSION['flash_error']='Password must be at least 8 characters.'; header('Location: '.APP_URL.'/modules/access/index.php'); exit; }
         if ($pass) $data['password'] = password_hash($pass, PASSWORD_BCRYPT);
     }
     if ($editId) {
@@ -286,6 +287,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('userModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="user">
     <?php if ($editUser): ?><input type="hidden" name="edit_id" value="<?= $editUser['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-2 gap-4">
@@ -319,7 +321,7 @@ include __DIR__ . '/../../includes/header.php';
       </div>
       <div class="col-span-2">
         <label class="form-label"><?= $editUser?'New Password (leave blank to keep)':'Password *' ?></label>
-        <input type="password" name="password" class="form-input" <?= !$editUser?'required':'' ?> placeholder="Min. 8 characters">
+        <input type="password" name="password" class="form-input" minlength="8" <?= !$editUser?'required':'' ?> placeholder="Min. 8 characters">
       </div>
     </div>
     <div class="flex justify-end gap-3 mt-5 pt-4 border-t">
@@ -339,6 +341,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('roleModal')" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <input type="hidden" name="form" value="role">
     <?php if ($editRole): ?><input type="hidden" name="edit_id" value="<?= $editRole['id'] ?>"><?php endif; ?>
     <div class="grid grid-cols-1 gap-4 mb-5">

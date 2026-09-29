@@ -221,6 +221,7 @@ include __DIR__ . '/../../includes/header.php';
     <button onclick="closeModal('invoiceModal')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
   </div>
   <form method="POST" class="p-6">
+    <?= csrfField() ?>
     <?php if ($editInvoice): ?>
     <input type="hidden" name="edit_id" value="<?= $editInvoice['id'] ?>">
     <?php endif; ?>
